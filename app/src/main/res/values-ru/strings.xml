@@ -226,7 +226,7 @@
     <string name="remove">Удалить</string>
     <string name="more_options">Дополнительные параметры</string>
     <string name="migrate_platform">Миграция платформ</string>
-    <string name="migrate">Миграция</string>
+    <string name="migrate">Мигрировать</string>
     <string name="client_type_openai_desc">API для получения ответов OpenAI</string>
     <string name="thinking_in_progress">Рассуждения…</string>
     <string name="extended_thinking">Расширенные рассуждения</string>
