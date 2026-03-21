@@ -63,7 +63,6 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -357,7 +356,6 @@ private fun ChatMessagePair(
 ) {
     val assistantContent = assistantMessages.getOrNull(platformIndexState)?.content ?: ""
     val assistantThoughts = assistantMessages.getOrNull(platformIndexState)?.thoughts ?: ""
-    val selectedPlatformUid = enabledPlatformsInChat.getOrElse(platformIndexState) { "" }
     val isCurrentPlatformLoading =
         loadingStates.getOrElse(platformIndexState) { ChatViewModel.LoadingState.Idle } == ChatViewModel.LoadingState.Loading
     var isDropDownMenuExpanded by remember { mutableStateOf(false) }
@@ -417,21 +415,19 @@ private fun ChatMessagePair(
                     }
                 }
             }
-            key(selectedPlatformUid) {
-                OpponentChatBubble(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .widthIn(max = maximumOpponentChatBubbleWidth),
-                    canRetry = canUseChat && isActiveMessage && !isCurrentPlatformLoading,
-                    isLoading = isActiveMessage && isCurrentPlatformLoading,
-                    text = assistantContent,
-                    thoughts = assistantThoughts,
-                    onCopyClick = { onCopyText(assistantContent) },
-                    onSelectClick = { onSelectText(assistantContent) },
-                    onRetryClick = { onRetry(platformIndexState) }
-                )
-            }
+            OpponentChatBubble(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .widthIn(max = maximumOpponentChatBubbleWidth),
+                canRetry = canUseChat && isActiveMessage && !isCurrentPlatformLoading,
+                isLoading = isActiveMessage && isCurrentPlatformLoading,
+                text = assistantContent,
+                thoughts = assistantThoughts,
+                onCopyClick = { onCopyText(assistantContent) },
+                onSelectClick = { onSelectText(assistantContent) },
+                onRetryClick = { onRetry(platformIndexState) }
+            )
         }
     }
 }

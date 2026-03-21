@@ -72,6 +72,7 @@ private const val DISPLAY_MATH_PLACEHOLDER_SUFFIX = "_TOKEN"
 @Composable
 fun ChatMarkdown(
     content: String,
+    isStreaming: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isDarkTheme = isSystemInDarkTheme()
@@ -189,7 +190,7 @@ fun ChatMarkdown(
     }
     val markdownState = rememberMarkdownState(
         content = combinedMarkdown,
-        retainState = true
+        retainState = isStreaming
     )
     val animations = markdownAnimations(animateTextSize = { this })
 

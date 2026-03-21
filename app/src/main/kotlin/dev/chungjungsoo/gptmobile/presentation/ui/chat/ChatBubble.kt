@@ -70,6 +70,7 @@ fun UserChatBubble(
         ) {
             ChatMarkdown(
                 content = text,
+                isStreaming = false,
                 modifier = Modifier.padding(16.dp)
             )
         }
@@ -118,6 +119,7 @@ fun OpponentChatBubble(
 
                 ChatMarkdown(
                     content = displayText,
+                    isStreaming = isLoading,
                     modifier = Modifier
                         .padding(16.dp)
                 )
