@@ -76,7 +76,7 @@ fun UserChatBubble(
             colors = cardColor
         ) {
             ChatMarkdown(
-                content = text.trimIndent(),
+                content = text,
                 modifier = Modifier.padding(16.dp)
             )
         }
@@ -121,7 +121,7 @@ fun OpponentChatBubble(
                 shape = RoundedCornerShape(0.dp),
                 colors = cardColor
             ) {
-                val displayText = if (isLoading) text.trimIndent() + "●" else text.trimIndent()
+                val displayText = if (isLoading) text + "●" else text
 
                 ChatMarkdown(
                     content = displayText,

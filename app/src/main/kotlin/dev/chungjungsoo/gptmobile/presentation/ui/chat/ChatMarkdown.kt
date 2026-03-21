@@ -27,17 +27,25 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.mikepenz.markdown.annotator.annotatorSettings
+import com.mikepenz.markdown.compose.LocalMarkdownTypography
+import com.mikepenz.markdown.compose.LocalReferenceLinkHandler
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownParagraph
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.model.markdownAnnotator
 import com.mikepenz.markdown.model.markdownInlineContent
@@ -45,7 +53,12 @@ import dev.chungjungsoo.gptmobile.R
 import dev.snipme.highlights.Highlights
 import dev.snipme.highlights.model.SyntaxThemes
 import katex.hourglass.`in`.mathlib.MathView
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+
+private const val CLIPBOARD_LABEL_CODE = "code"
+private const val DISPLAY_MATH_PLACEHOLDER_PREFIX = "CHAT_MATH_DISPLAY_"
+private const val DISPLAY_MATH_PLACEHOLDER_SUFFIX = "_TOKEN"
 
 @Composable
 fun ChatMarkdown(
@@ -59,8 +72,19 @@ fun ChatMarkdown(
     val highlightsBuilder = remember(isDarkTheme) {
         Highlights.Builder().theme(SyntaxThemes.atom(isDarkTheme))
     }
+    val combinedMarkdown = remember(parsed.blocks) {
+        buildCombinedMarkdown(parsed.blocks)
+    }
     val inlineMathByPlaceholder = remember(parsed.inlineMath) {
         parsed.inlineMath.associateBy { it.placeholder }
+    }
+    val displayMathByPlaceholder = remember(parsed.blocks) {
+        parsed.blocks
+            .filterIsInstance<ChatMarkdownBlock.DisplayMath>()
+            .mapIndexed { index, block ->
+                createDisplayMathPlaceholder(index) to block
+            }
+            .toMap()
     }
     val annotator = remember(inlineMathByPlaceholder) {
         markdownAnnotator { source, child ->
@@ -86,17 +110,20 @@ fun ChatMarkdown(
             }
         }
     }
-    val components = remember(clipboard, highlightsBuilder) {
+    val copyCodeToClipboard: (String) -> Unit = remember(clipboard, scope) {
+        { code ->
+            scope.launch {
+                clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(CLIPBOARD_LABEL_CODE, code)))
+            }
+        }
+    }
+    val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator) {
         markdownComponents(
             codeBlock = {
                 CodeBlockWithCopy(
                     code = it.content,
                     textStyleSize = it.typography.code.fontSize,
-                    onCopyCode = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(it, it)))
-                        }
-                    }
+                    onCopyCode = copyCodeToClipboard
                 ) {
                     MarkdownHighlightedCodeBlock(
                         it.content,
@@ -111,11 +138,7 @@ fun ChatMarkdown(
                 CodeBlockWithCopy(
                     code = it.content,
                     textStyleSize = it.typography.code.fontSize,
-                    onCopyCode = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(it, it)))
-                        }
-                    }
+                    onCopyCode = copyCodeToClipboard
                 ) {
                     MarkdownHighlightedCodeFence(
                         it.content,
@@ -125,33 +148,31 @@ fun ChatMarkdown(
                         false
                     )
                 }
+            },
+            paragraph = { model ->
+                val paragraphText = extractNodeText(model.content, model.node).trim()
+                val displayMath = displayMathByPlaceholder[paragraphText]
+                if (displayMath != null) {
+                    DisplayMathView(
+                        tex = displayMath.tex,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                    )
+                } else {
+                    DefaultParagraph(model.content, model.node, model.typography.paragraph, annotator)
+                }
             }
         )
     }
 
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        parsed.blocks.forEach { block ->
-            when (block) {
-                is ChatMarkdownBlock.DisplayMath -> DisplayMathView(
-                    tex = block.tex,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight()
-                )
-
-                is ChatMarkdownBlock.Markdown -> Markdown(
-                    block.content,
-                    inlineContent = markdownInlineContent(inlineContent),
-                    annotator = annotator,
-                    components = components,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
+    Markdown(
+        combinedMarkdown,
+        inlineContent = markdownInlineContent(inlineContent),
+        annotator = annotator,
+        components = components,
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -173,12 +194,12 @@ private fun CodeBlockWithCopy(
                 style = MaterialTheme.typography.labelMedium.copy(fontSize = textStyleSize)
             )
             IconButton(
-                modifier = Modifier.size(20.dp),
                 onClick = { onCopyCode(code) }
             ) {
                 Icon(
+                    modifier = Modifier.size(20.dp),
                     imageVector = ImageVector.vectorResource(R.drawable.ic_copy),
-                    contentDescription = stringResource(R.string.copy_text)
+                    contentDescription = stringResource(R.string.copy_code)
                 )
             }
         }
@@ -217,11 +238,77 @@ private fun appendTextWithInlineMath(
 
 private fun inlineMathWidth(tex: String) = (tex.length.coerceIn(2, 24) * 0.55f).em
 
+private fun buildCombinedMarkdown(blocks: List<ChatMarkdownBlock>): String = buildString {
+    var displayMathIndex = 0
+    blocks.forEach { block ->
+        when (block) {
+            is ChatMarkdownBlock.Markdown -> append(block.content)
+            is ChatMarkdownBlock.DisplayMath -> appendDisplayMathPlaceholder(createDisplayMathPlaceholder(displayMathIndex++))
+        }
+    }
+}
+
+private fun StringBuilder.appendDisplayMathPlaceholder(placeholder: String) {
+    val currentLinePrefix = currentLinePrefix()
+    if (isEmpty() || last() == '\n' || currentLinePrefix != null) {
+        append(placeholder)
+        return
+    }
+
+    appendLine()
+    appendLine()
+    append(placeholder)
+    appendLine()
+    appendLine()
+}
+
+private fun StringBuilder.currentLinePrefix(): String? {
+    val lineStart = lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }
+    if (lineStart == length) return ""
+
+    val currentLine = substring(lineStart, length)
+    return currentLine.takeIf { line ->
+        line.all { character ->
+            character == ' ' || character == '\t' || character == '>'
+        }
+    }
+}
+
+private fun createDisplayMathPlaceholder(index: Int): String = "$DISPLAY_MATH_PLACEHOLDER_PREFIX$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX"
+
+@Composable
+private fun DefaultParagraph(
+    content: String,
+    node: org.intellij.markdown.ast.ASTNode,
+    style: TextStyle,
+    annotator: com.mikepenz.markdown.model.MarkdownAnnotator
+) {
+    MarkdownParagraph(
+        content,
+        node,
+        Modifier,
+        style,
+        annotatorSettings(
+            LocalMarkdownTypography.current.textLink,
+            LocalMarkdownTypography.current.inlineCode.toSpanStyle(),
+            annotator,
+            LocalReferenceLinkHandler.current,
+            LocalUriHandler.current,
+            null
+        )
+    )
+}
+
+private fun extractNodeText(
+    content: String,
+    node: org.intellij.markdown.ast.ASTNode
+): String = content.substring(node.startOffset, node.endOffset)
+
 @Composable
 private fun InlineMathView(tex: String) {
     MathViewContent(
         renderedText = "\\($tex\\)",
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
     )
 }
 
@@ -243,7 +330,10 @@ private fun MathViewContent(
 ) {
     val textColor = LocalContentColor.current
     val density = LocalDensity.current
-    val textSizePx = with(density) { 16.dp.roundToPx() }
+    val fontSize = MaterialTheme.typography.bodyMedium.fontSize
+        .takeIf { it.type != TextUnitType.Unspecified }
+        ?: 16.sp
+    val textSizePx = with(density) { fontSize.toPx() }.roundToInt()
 
     AndroidView(
         modifier = modifier,

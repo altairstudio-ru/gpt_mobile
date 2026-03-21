@@ -2,6 +2,7 @@ package dev.chungjungsoo.gptmobile.presentation.ui.chat
 
 private const val INLINE_MATH_PLACEHOLDER_PREFIX = "CHAT_MATH_INLINE_"
 private const val INLINE_MATH_PLACEHOLDER_SUFFIX = "_TOKEN"
+private const val MAX_FENCE_INDENT = 3
 
 data class ParsedChatMarkdown(
     val blocks: List<ChatMarkdownBlock>,
@@ -27,10 +28,18 @@ fun parseChatMarkdown(content: String): ParsedChatMarkdown {
 
     while (index < content.length) {
         val fence = detectFenceDelimiter(content, index)
-        if (fence != null && isLineStart(content, index)) {
+        if (fence != null && isFenceStart(content, index)) {
             val fenceEnd = findFenceBlockEnd(content, index, fence)
             markdownBuffer.append(content, index, fenceEnd)
             index = fenceEnd
+            continue
+        }
+
+        val backtickCount = detectBacktickRun(content, index)
+        if (backtickCount > 0) {
+            val codeEnd = findInlineCodeEnd(content, index + backtickCount, backtickCount)
+            markdownBuffer.append(content, index, codeEnd)
+            index = codeEnd
             continue
         }
 
@@ -86,7 +95,7 @@ private fun replaceInlineMath(
 
     while (index < content.length) {
         val fence = detectFenceDelimiter(content, index)
-        if (fence != null && isLineStart(content, index)) {
+        if (fence != null && isFenceStart(content, index)) {
             val fenceEnd = findFenceBlockEnd(content, index, fence)
             output.append(content, index, fenceEnd)
             index = fenceEnd
@@ -182,8 +191,9 @@ private fun findFenceBlockEnd(content: String, start: Int, fence: String): Int {
     index++
 
     while (index < content.length) {
-        if (isLineStart(content, index) && content.startsWith(fence, index)) {
-            val lineEnd = content.indexOf('\n', index).let { if (it == -1) content.length else it + 1 }
+        val fenceStart = findFenceStartInLine(content, index, fence)
+        if (fenceStart != -1) {
+            val lineEnd = content.indexOf('\n', fenceStart).let { if (it == -1) content.length else it + 1 }
             return lineEnd
         }
         index = content.indexOf('\n', index).let { if (it == -1) content.length else it + 1 }
@@ -250,6 +260,27 @@ private fun findClosingInlineDollar(content: String, start: Int): Int {
 private fun createPlaceholder(index: Int): String = "$INLINE_MATH_PLACEHOLDER_PREFIX$index$INLINE_MATH_PLACEHOLDER_SUFFIX"
 
 private fun isLineStart(content: String, index: Int): Boolean = index == 0 || content[index - 1] == '\n'
+
+private fun isFenceStart(content: String, index: Int): Boolean {
+    val lineStart = content.lastIndexOf('\n', index - 1).let { if (it == -1) 0 else it + 1 }
+    val leadingSpaces = index - lineStart
+    if (leadingSpaces > MAX_FENCE_INDENT) return false
+    for (current in lineStart until index) {
+        if (content[current] != ' ') return false
+    }
+    return true
+}
+
+private fun findFenceStartInLine(content: String, lineStart: Int, fence: String): Int {
+    var index = lineStart
+    var leadingSpaces = 0
+    while (index < content.length && content[index] == ' ' && leadingSpaces < MAX_FENCE_INDENT) {
+        index++
+        leadingSpaces++
+    }
+
+    return if (content.startsWith(fence, index)) index else -1
+}
 
 private fun isEscaped(content: String, index: Int): Boolean {
     var backslashCount = 0

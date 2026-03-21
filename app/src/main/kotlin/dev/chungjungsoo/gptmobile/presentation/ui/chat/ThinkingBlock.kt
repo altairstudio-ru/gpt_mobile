@@ -101,7 +101,7 @@ fun ThinkingBlock(
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
-            val displayText = if (isLoading) thoughts.trimIndent() + "●" else thoughts.trimIndent()
+            val displayText = if (isLoading) thoughts + "●" else thoughts
 
             ChatMarkdown(
                 content = displayText,

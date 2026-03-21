@@ -45,7 +45,7 @@ class ChatMarkdownParserTest {
     fun parseChatMarkdown_codeFenceAndInlineCode_ignoreMathParsing() {
         val parsed = parseChatMarkdown(
             """
-            Inline code `${'$'}notMath${'$'}`
+            Inline code `${'$'}${'$'}notMath${'$'}${'$'}`
             
             ```kotlin
             val formula = "${'$'}${'$'}alsoNotMath${'$'}${'$'}"
@@ -58,9 +58,27 @@ class ChatMarkdownParserTest {
         assertEquals(1, parsed.inlineMath.size)
         val markdown = (parsed.blocks.single() as ChatMarkdownBlock.Markdown).content
 
-        assertTrue(markdown.contains("`${'$'}notMath${'$'}`"))
+        assertTrue(markdown.contains("`${'$'}${'$'}notMath${'$'}${'$'}`"))
         assertTrue(markdown.contains("${'$'}${'$'}alsoNotMath${'$'}${'$'}"))
         assertTrue(markdown.contains(parsed.inlineMath.single().placeholder))
+    }
+
+    @Test
+    fun parseChatMarkdown_indentedFence_keepsDisplayMathLiteral() {
+        val parsed = parseChatMarkdown(
+            """
+            - item
+              
+              ```kotlin
+              val env = "${'$'}${'$'}HOME${'$'}${'$'}"
+              ```
+            """.trimIndent()
+        )
+
+        assertTrue(parsed.inlineMath.isEmpty())
+        assertEquals(1, parsed.blocks.size)
+        val markdown = parsed.blocks.single() as ChatMarkdownBlock.Markdown
+        assertTrue(markdown.content.contains("${'$'}${'$'}HOME${'$'}${'$'}"))
     }
 
     @Test
