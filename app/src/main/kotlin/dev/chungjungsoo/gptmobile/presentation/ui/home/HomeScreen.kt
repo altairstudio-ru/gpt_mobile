@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Close
@@ -123,6 +124,10 @@ fun HomeScreen(
                     } else {
                         settingOnClick()
                     }
+                },
+                duplicateOnClick = {
+                    homeViewModel.duplicateSelectedChat()
+                    Toast.makeText(context, context.getString(R.string.duplicated_chat), Toast.LENGTH_SHORT).show()
                 },
                 navigationOnClick = {
                     if (chatListState.isSelectionMode) {
@@ -250,6 +255,7 @@ fun HomeTopAppBar(
     selectedChats: Int,
     scrollBehavior: TopAppBarScrollBehavior,
     actionOnClick: () -> Unit,
+    duplicateOnClick: () -> Unit,
     navigationOnClick: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     searchQuery: String
@@ -352,6 +358,19 @@ fun HomeTopAppBar(
         actions = {
             when {
                 isSelectionMode -> {
+                    if (selectedChats == 1) {
+                        IconButton(
+                            modifier = Modifier.padding(4.dp),
+                            enabled = true,
+                            onClick = duplicateOnClick
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                contentDescription = stringResource(R.string.duplicate)
+                            )
+                        }
+                    }
                     IconButton(
                         modifier = Modifier.padding(4.dp),
                         onClick = actionOnClick

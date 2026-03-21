@@ -126,6 +126,19 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun duplicateSelectedChat() {
+        viewModelScope.launch {
+            val selectedChats = _chatListState.value.chats.filterIndexed { index, _ ->
+                _chatListState.value.selectedChats[index]
+            }
+            val selectedChat = selectedChats.singleOrNull() ?: return@launch
+
+            chatRepository.duplicateChatV2(selectedChat)
+            _chatListState.update { it.copy(chats = chatRepository.fetchChatListV2()) }
+            disableSelectionMode()
+        }
+    }
+
     fun disableSelectionMode() {
         _chatListState.update {
             it.copy(

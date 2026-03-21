@@ -99,8 +99,10 @@
     <string name="not_set">Not set</string>
     <string name="close">Close</string>
     <string name="delete">Delete</string>
+    <string name="duplicate">Duplicate</string>
     <string name="chats_selected">%d selected</string>
     <string name="deleted_chats">Deleted %d chats.</string>
+    <string name="duplicated_chat">Duplicated chat.</string>
     <string name="delete_selected_chats">Delete selected chats?</string>
     <string name="this_operation_can_t_be_undone">This operation can\'t be undone.</string>
     <string name="system_prompt">System Prompt</string>

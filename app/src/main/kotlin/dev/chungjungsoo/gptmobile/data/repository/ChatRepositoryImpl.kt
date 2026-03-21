@@ -725,6 +725,37 @@ class ChatRepositoryImpl @Inject constructor(
         return chatRoom
     }
 
+    override suspend fun duplicateChatV2(chatRoom: ChatRoomV2): ChatRoomV2 {
+        val duplicatedTitle = "${chatRoom.title} (copy)".take(50)
+        val duplicatedChatId = chatRoomV2Dao.addChatRoom(
+            ChatRoomV2(
+                title = duplicatedTitle,
+                enabledPlatform = chatRoom.enabledPlatform
+            )
+        ).toInt()
+
+        val messages = fetchMessagesV2(chatRoom.id).map { message ->
+            message.copy(
+                id = 0,
+                chatId = duplicatedChatId,
+                linkedMessageId = 0
+            )
+        }
+        if (messages.isNotEmpty()) {
+            messageV2Dao.addMessages(*messages.toTypedArray())
+        }
+
+        val chatPlatformModels = fetchChatPlatformModels(chatRoom.id)
+        saveChatPlatformModels(duplicatedChatId, chatPlatformModels)
+
+        return chatRoom.copy(
+            id = duplicatedChatId,
+            title = duplicatedTitle,
+            createdAt = System.currentTimeMillis() / 1000,
+            updatedAt = System.currentTimeMillis() / 1000
+        )
+    }
+
     override suspend fun deleteChats(chatRooms: List<ChatRoom>) {
         chatRoomDao.deleteChatRooms(*chatRooms.toTypedArray())
     }
