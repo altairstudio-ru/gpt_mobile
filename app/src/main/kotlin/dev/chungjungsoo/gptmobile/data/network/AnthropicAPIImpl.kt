@@ -5,7 +5,9 @@ import dev.chungjungsoo.gptmobile.data.dto.anthropic.request.MessageRequest
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorDetail
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorResponseChunk
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.response.MessageResponseChunk
+import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept
 import io.ktor.client.request.headers
 import io.ktor.client.request.preparePost
@@ -44,11 +46,12 @@ class AnthropicAPIImpl @Inject constructor(
         this.apiUrl = url
     }
 
-    override fun streamChatMessage(messageRequest: MessageRequest): Flow<MessageResponseChunk> = flow {
+    override fun streamChatMessage(messageRequest: MessageRequest, timeoutSeconds: Int): Flow<MessageResponseChunk> = flow {
         try {
             val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/messages" else "$apiUrl/v1/messages"
 
             networkClient().preparePost(endpoint) {
+                applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToJsonElement(messageRequest))
                 accept(ContentType.Text.EventStream)
@@ -93,7 +96,8 @@ class AnthropicAPIImpl @Inject constructor(
                 is java.net.UnknownHostException -> "Network error: Unable to resolve host."
                 is java.nio.channels.UnresolvedAddressException -> "Network error: Unable to resolve address. Check your internet connection."
                 is java.net.ConnectException -> "Network error: Connection refused. Check the API URL."
-                is java.net.SocketTimeoutException -> "Network error: Connection timed out."
+                is HttpRequestTimeoutException -> "Request timed out."
+                is java.net.SocketTimeoutException -> "Response timed out while waiting for the next chunk."
                 is javax.net.ssl.SSLException -> "Network error: SSL/TLS connection failed."
                 else -> e.message ?: "Unknown network error"
             }

@@ -117,6 +117,11 @@
     <string name="temperature_setting_description">Temperature is an amount of randomness injected into the response. Usually defaults to 1.0.\nSet low temperature for more focused and deterministic answers, and high for random answers.</string>
     <string name="top_p_setting">Nucleus Sampling Setting</string>
     <string name="top_p_setting_description">In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by this value.\nMost models usually recommend altering this or temperature but not both.</string>
+    <string name="timeout">Timeout</string>
+    <string name="timeout_icon">Timeout Icon</string>
+    <string name="timeout_seconds_label">Timeout (seconds)</string>
+    <string name="timeout_setting_description">Maximum idle time between streamed response chunks. Set to 0 to disable the timeout.</string>
+    <string name="timeout_invalid">Enter 0 or a positive number of seconds.</string>
     <string name="about">About</string>
     <string name="about_description">Version, License, Feedback</string>
     <string name="version">Version</string>

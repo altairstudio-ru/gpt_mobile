@@ -33,9 +33,7 @@ class NetworkClient @Inject constructor(
 
             install(SSE)
 
-            install(HttpTimeout) {
-                requestTimeoutMillis = TIMEOUT.toLong()
-            }
+            install(HttpTimeout)
 
             install(Logging) {
                 logger = Logger.DEFAULT
@@ -52,8 +50,6 @@ class NetworkClient @Inject constructor(
     operator fun invoke(): HttpClient = client
 
     companion object {
-        private const val TIMEOUT = 1_000 * 60 * 5
-
         // Default JSON config (used for most APIs)
         val json = Json {
             isLenient = true

@@ -82,6 +82,9 @@ class PlatformSettingViewModel @Inject constructor(
     fun openSystemPromptDialog() = _dialogState.update { it.copy(isSystemPromptDialogOpen = true) }
     fun closeSystemPromptDialog() = _dialogState.update { it.copy(isSystemPromptDialogOpen = false) }
 
+    fun openTimeoutDialog() = _dialogState.update { it.copy(isTimeoutDialogOpen = true) }
+    fun closeTimeoutDialog() = _dialogState.update { it.copy(isTimeoutDialogOpen = false) }
+
     fun updatePlatformName(name: String) {
         _platformState.value?.let { platform ->
             updatePlatform(platform.copy(name = name.trim()))
@@ -131,6 +134,14 @@ class PlatformSettingViewModel @Inject constructor(
         }
     }
 
+    fun updateTimeout(timeoutSeconds: Int) {
+        _platformState.value?.let { platform ->
+            val normalizedTimeout = timeoutSeconds.coerceAtLeast(0)
+            updatePlatform(platform.copy(timeout = normalizedTimeout))
+            closeTimeoutDialog()
+        }
+    }
+
     fun openDeleteDialog() = _dialogState.update { it.copy(isDeleteDialogOpen = true) }
     fun closeDeleteDialog() = _dialogState.update { it.copy(isDeleteDialogOpen = false) }
 
@@ -152,6 +163,7 @@ class PlatformSettingViewModel @Inject constructor(
         val isTemperatureDialogOpen: Boolean = false,
         val isTopPDialogOpen: Boolean = false,
         val isSystemPromptDialogOpen: Boolean = false,
+        val isTimeoutDialogOpen: Boolean = false,
         val isDeleteDialogOpen: Boolean = false
     )
 }
