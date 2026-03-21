@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.max
@@ -144,11 +145,11 @@ internal fun InlineMathView(tex: String) {
     val fontSize = MaterialTheme.typography.bodyMedium.fontSize
         .takeIf { it.type != TextUnitType.Unspecified }
         ?: 16.sp
-    val fontSizePx = remember(fontSize, density) {
-        with(density) { fontSize.toPx().roundToInt() }
+    val fontSizeCssPx = remember(fontSize, density.fontScale) {
+        (fontSize.value * density.fontScale).roundToInt()
     }
-    val minimumHeightPx = remember(fontSizePx) {
-        (fontSizePx * 1.4f).roundToInt()
+    val minimumHeightCssPx = remember(fontSizeCssPx) {
+        (fontSizeCssPx * 1.4f).roundToInt()
     }
     val textColorCss = remember(textColor) {
         formatCssColor(textColor)
@@ -157,9 +158,9 @@ internal fun InlineMathView(tex: String) {
     MathJaxFormulaView(
         tex = tex,
         displayMode = false,
-        fontSizePx = fontSizePx,
+        fontSizePx = fontSizeCssPx,
         textColorCss = textColorCss,
-        minimumHeightPx = minimumHeightPx,
+        minimumHeightPx = minimumHeightCssPx,
         modifier = Modifier.fillMaxSize()
     )
 }
@@ -174,30 +175,28 @@ internal fun DisplayMathView(
     val fontSize = MaterialTheme.typography.bodyMedium.fontSize
         .takeIf { it.type != TextUnitType.Unspecified }
         ?: 16.sp
-    val fontSizePx = remember(fontSize, density) {
-        with(density) { fontSize.toPx().roundToInt() }
+    val fontSizeCssPx = remember(fontSize, density.fontScale) {
+        (fontSize.value * density.fontScale).roundToInt()
     }
-    val minimumHeightPx = remember(fontSizePx) {
-        estimateDisplayMathMinimumHeightPx(tex, fontSizePx)
+    val minimumHeightCssPx = remember(tex, fontSizeCssPx) {
+        estimateDisplayMathMinimumHeightPx(tex, fontSizeCssPx)
     }
     val textColorCss = remember(textColor) {
         formatCssColor(textColor)
     }
-    var measuredHeightPx by remember(tex, fontSizePx, textColorCss) {
-        mutableIntStateOf(minimumHeightPx)
+    var measuredHeightCssPx by remember(tex, fontSizeCssPx, textColorCss) {
+        mutableIntStateOf(minimumHeightCssPx)
     }
 
     MathJaxFormulaView(
         tex = tex,
         displayMode = true,
-        fontSizePx = fontSizePx,
+        fontSizePx = fontSizeCssPx,
         textColorCss = textColorCss,
-        minimumHeightPx = minimumHeightPx,
-        modifier = modifier.height(
-            with(density) { measuredHeightPx.toDp() }
-        ),
+        minimumHeightPx = minimumHeightCssPx,
+        modifier = modifier.height(measuredHeightCssPx.dp),
         onMeasured = { heightPx ->
-            measuredHeightPx = heightPx.coerceAtLeast(minimumHeightPx)
+            measuredHeightCssPx = heightPx.coerceAtLeast(minimumHeightCssPx)
         }
     )
 }

@@ -387,7 +387,7 @@ private fun String.containsDisplaySizedMath(): Boolean = listOf(
 
 private fun String.containsSuperscriptOrSubscriptMath(): Boolean = contains('^') || contains('_')
 
-private fun buildCombinedMarkdown(blocks: List<ChatMarkdownBlock>): String = buildString {
+internal fun buildCombinedMarkdown(blocks: List<ChatMarkdownBlock>): String = buildString {
     var displayMathIndex = 0
     blocks.forEach { block ->
         when (block) {
@@ -398,18 +398,22 @@ private fun buildCombinedMarkdown(blocks: List<ChatMarkdownBlock>): String = bui
 }
 
 private fun StringBuilder.appendDisplayMathPlaceholder(placeholder: String) {
-    val currentLinePrefix = currentLinePrefix()
-    if (isEmpty() || last() == '\n' || currentLinePrefix != null) {
-        append(placeholder)
-        return
+    val linePrefix = currentLinePrefix().orEmpty()
+    if (!isEmpty() && !endsWithBlankLine()) {
+        if (last() != '\n') {
+            appendLine()
+        }
+        appendLine()
     }
-
-    appendLine()
-    appendLine()
+    if (linePrefix.isNotEmpty()) {
+        append(linePrefix)
+    }
     append(placeholder)
     appendLine()
     appendLine()
 }
+
+private fun StringBuilder.endsWithBlankLine(): Boolean = length >= 2 && this[length - 1] == '\n' && this[length - 2] == '\n'
 
 private fun StringBuilder.currentLinePrefix(): String? {
     val lineStart = lastIndexOf('\n').let { if (it == -1) 0 else it + 1 }

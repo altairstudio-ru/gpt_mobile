@@ -98,6 +98,28 @@ class ChatMarkdownParserTest {
     }
 
     @Test
+    fun buildCombinedMarkdown_displayMathAfterParagraph_isolatedIntoOwnParagraph() {
+        val parsed = parseChatMarkdown(
+            """
+            **Forward Transform:**
+            ${'$'}${'$'}X(f) = \int_{-\infty}^{\infty} x(t) \, e^{-j2\pi ft} \, dt${'$'}${'$'}
+            """.trimIndent()
+        )
+
+        val combinedMarkdown = buildCombinedMarkdown(parsed.blocks)
+
+        assertTrue(
+            combinedMarkdown.contains(
+                """
+                **Forward Transform:**
+
+                CHAT_MATH_DISPLAY_0_TOKEN
+                """.trimIndent()
+            )
+        )
+    }
+
+    @Test
     fun containsInlineMathPlaceholder_withoutToken_returnsFalse() {
         assertFalse(containsInlineMathPlaceholder("plain markdown"))
     }
