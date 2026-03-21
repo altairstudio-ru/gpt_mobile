@@ -19,7 +19,7 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.readUTF8Line
+import io.ktor.utils.io.readLine
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -77,7 +77,7 @@ class OpenAIAPIImpl @Inject constructor(
                 // Success - read SSE stream
                 val channel = response.bodyAsChannel()
                 while (!channel.isClosedForRead) {
-                    val line = channel.readUTF8Line() ?: break
+                    val line = channel.readLine() ?: break
 
                     if (line.startsWith("data: ")) {
                         val data = line.removePrefix("data: ").trim()
@@ -142,7 +142,7 @@ class OpenAIAPIImpl @Inject constructor(
                 // Success - read SSE stream
                 val channel = response.bodyAsChannel()
                 while (!channel.isClosedForRead) {
-                    val line = channel.readUTF8Line() ?: break
+                    val line = channel.readLine() ?: break
 
                     if (line.startsWith("data: ")) {
                         val data = line.removePrefix("data: ").trim()

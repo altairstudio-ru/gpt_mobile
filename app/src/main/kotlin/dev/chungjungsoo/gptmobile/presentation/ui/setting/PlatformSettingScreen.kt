@@ -135,7 +135,7 @@ fun PlatformSettingScreen(
                     description = if (platformData.token.isNullOrEmpty()) {
                         stringResource(R.string.token_not_set)
                     } else {
-                        stringResource(R.string.token_set, platformData.token!![0])
+                        stringResource(R.string.token_set, platformData.token[0])
                     },
                     enabled = platformData.enabled,
                     onItemClick = settingViewModel::openApiTokenDialog,

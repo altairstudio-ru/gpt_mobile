@@ -59,7 +59,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
 
 class ChatRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val chatRoomDao: ChatRoomDao,
     private val messageDao: MessageDao,
     private val chatRoomV2Dao: ChatRoomV2Dao,
