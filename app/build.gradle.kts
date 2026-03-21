@@ -1,4 +1,8 @@
+@file:Suppress("UnstableApiUsage")
+
+import com.android.build.api.dsl.ApplicationExtension
 import org.gradle.kotlin.dsl.aboutLibraries
+import org.gradle.kotlin.dsl.configure
 
 plugins {
     alias(libs.plugins.android.application)
@@ -11,7 +15,7 @@ plugins {
     kotlin(libs.plugins.kotlin.serialization.get().pluginId).version(libs.versions.kotlin)
 }
 
-android {
+extensions.configure<ApplicationExtension> {
     namespace = "dev.chungjungsoo.gptmobile"
     compileSdk = 36
 
@@ -28,19 +32,13 @@ android {
         }
     }
 
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
-
     androidResources {
-        @file:Suppress("UnstableApiUsage") // Incubating class
         generateLocaleConfig = true
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
-            @file:Suppress("UnstableApiUsage")
             vcsInfo.include = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -62,6 +60,10 @@ android {
             excludes += "META-INF/io.netty.versions.properties"
         }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
