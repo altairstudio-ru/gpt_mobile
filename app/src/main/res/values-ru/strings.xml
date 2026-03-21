@@ -199,7 +199,7 @@
     <string name="hide_thinking">Скрыть рассуждения</string>
     <string name="expand">Развернуть</string>
     <string name="collapse">Свернуть</string>
-<string name="extended_thinking_description">Включить для моделей, использующих процесс рассуждений (o1, o3, Claude с рассуждениями, Gemini с рассуждениями)</string>
+    <string name="extended_thinking_description">Включить для моделей, использующих процесс рассуждений (o1, o3, Claude с рассуждениями, Gemini с рассуждениями)</string>
     <string name="your_platforms">Ваши платформы</string>
     <string name="no_platforms_yet">Пока не добавлено ни одной платформы</string>
     <string name="add_your_first_platform">Добавьте первую платформу ИИ, чтобы начать работу</string>
