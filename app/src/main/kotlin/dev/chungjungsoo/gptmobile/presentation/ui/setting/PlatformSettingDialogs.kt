@@ -146,6 +146,21 @@ fun SystemPromptDialog(
 }
 
 @Composable
+fun TimeoutDialog(
+    dialogState: PlatformSettingViewModel.DialogState,
+    timeoutSeconds: Int,
+    settingViewModel: PlatformSettingViewModel
+) {
+    if (dialogState.isTimeoutDialogOpen) {
+        TimeoutDialog(
+            initialValue = timeoutSeconds,
+            onDismissRequest = settingViewModel::closeTimeoutDialog,
+            onConfirmRequest = settingViewModel::updateTimeout
+        )
+    }
+}
+
+@Composable
 private fun PlatformNameDialog(
     initialValue: String,
     onDismissRequest: () -> Unit,
@@ -288,6 +303,65 @@ private fun APIKeyDialog(
             TextButton(
                 onClick = onDismissRequest
             ) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun TimeoutDialog(
+    initialValue: Int,
+    onDismissRequest: () -> Unit,
+    onConfirmRequest: (timeoutSeconds: Int) -> Unit
+) {
+    val configuration = LocalWindowInfo.current
+    val screenWidth = with(LocalDensity.current) { configuration.containerSize.width.toDp() }
+    val screenHeight = with(LocalDensity.current) { configuration.containerSize.height.toDp() }
+    var timeoutSeconds by remember { mutableStateOf(initialValue.toString()) }
+    val parsedTimeout = timeoutSeconds.toIntOrNull()
+    val isValidTimeout = parsedTimeout != null && parsedTimeout >= 0
+
+    AlertDialog(
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .widthIn(max = screenWidth - 40.dp)
+            .heightIn(max = screenHeight - 80.dp),
+        title = { Text(text = stringResource(R.string.timeout)) },
+        text = {
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = timeoutSeconds,
+                onValueChange = { timeoutSeconds = it },
+                label = { Text(stringResource(R.string.timeout_seconds_label)) },
+                singleLine = true,
+                isError = !isValidTimeout,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                supportingText = {
+                    Text(
+                        text = if (isValidTimeout) {
+                            stringResource(R.string.timeout_setting_description)
+                        } else {
+                            stringResource(R.string.timeout_invalid)
+                        }
+                    )
+                }
+            )
+        },
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            TextButton(
+                enabled = isValidTimeout,
+                onClick = { onConfirmRequest(parsedTimeout!!) }
+            ) {
+                Text(stringResource(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
                 Text(stringResource(R.string.cancel))
             }
         }

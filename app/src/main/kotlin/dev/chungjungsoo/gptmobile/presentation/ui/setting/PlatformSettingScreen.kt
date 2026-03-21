@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chungjungsoo.gptmobile.R
 import dev.chungjungsoo.gptmobile.data.model.ClientType
 import dev.chungjungsoo.gptmobile.presentation.common.SettingItem
+import dev.chungjungsoo.gptmobile.util.formatPlatformTimeout
 import dev.chungjungsoo.gptmobile.util.pinnedExitUntilCollapsedScrollBehavior
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -210,6 +211,21 @@ fun PlatformSettingScreen(
                         )
                     }
                 )
+                SettingItem(
+                    modifier = Modifier.height(64.dp),
+                    title = stringResource(R.string.timeout),
+                    description = formatPlatformTimeout(platformData.timeout, stringResource(R.string.off)),
+                    enabled = platformData.enabled,
+                    onItemClick = settingViewModel::openTimeoutDialog,
+                    showTrailingIcon = false,
+                    showLeadingIcon = true,
+                    leadingIcon = {
+                        Icon(
+                            ImageVector.vectorResource(id = R.drawable.ic_info),
+                            contentDescription = stringResource(R.string.timeout_icon)
+                        )
+                    }
+                )
                 ExtendedThinkingSwitch(
                     modifier = Modifier.height(64.dp),
                     enabled = platformData.enabled,
@@ -224,6 +240,7 @@ fun PlatformSettingScreen(
                 TemperatureDialog(dialogState, platformData.temperature, settingViewModel)
                 TopPDialog(dialogState, platformData.topP, settingViewModel)
                 SystemPromptDialog(dialogState, platformData.systemPrompt ?: "", settingViewModel)
+                TimeoutDialog(dialogState, platformData.timeout, settingViewModel)
                 DeletePlatformDialog(dialogState, settingViewModel)
             }
         }
