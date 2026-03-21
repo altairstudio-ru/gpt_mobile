@@ -1,63 +1,69 @@
 package dev.chungjungsoo.gptmobile.presentation.ui.chat
 
 import android.content.ClipData
-import android.util.TypedValue
-import android.widget.TextView
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.mikepenz.markdown.annotator.annotatorSettings
 import com.mikepenz.markdown.compose.LocalMarkdownTypography
 import com.mikepenz.markdown.compose.LocalReferenceLinkHandler
 import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeBlock
-import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
+import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import com.mikepenz.markdown.compose.elements.MarkdownParagraph
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.MarkdownAnnotator
+import com.mikepenz.markdown.model.markdownAnimations
 import com.mikepenz.markdown.model.markdownAnnotator
 import com.mikepenz.markdown.model.markdownInlineContent
+import com.mikepenz.markdown.model.rememberMarkdownState
 import dev.chungjungsoo.gptmobile.R
 import dev.snipme.highlights.Highlights
+import dev.snipme.highlights.model.BoldHighlight
+import dev.snipme.highlights.model.ColorHighlight
+import dev.snipme.highlights.model.SyntaxLanguage
 import dev.snipme.highlights.model.SyntaxThemes
-import katex.hourglass.`in`.mathlib.MathView
-import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val CLIPBOARD_LABEL_CODE = "code"
 private const val DISPLAY_MATH_PLACEHOLDER_PREFIX = "CHAT_MATH_DISPLAY_"
@@ -81,7 +87,6 @@ fun ChatMarkdown(
     val inlineMathByPlaceholder = remember(parsed.inlineMath) {
         parsed.inlineMath.associateBy { it.placeholder }
     }
-    val typography = chatMarkdownTypography()
     val displayMathByPlaceholder = remember(parsed.blocks) {
         parsed.blocks
             .filterIsInstance<ChatMarkdownBlock.DisplayMath>()
@@ -124,33 +129,35 @@ fun ChatMarkdown(
     val components = remember(highlightsBuilder, copyCodeToClipboard, displayMathByPlaceholder, annotator) {
         markdownComponents(
             codeBlock = {
-                CodeBlockWithCopy(
-                    code = it.content,
-                    textStyleSize = it.typography.code.fontSize,
-                    onCopyCode = copyCodeToClipboard
-                ) {
-                    MarkdownHighlightedCodeBlock(
-                        it.content,
-                        it.node,
-                        it.typography.code,
-                        highlightsBuilder,
-                        false
-                    )
+                MarkdownCodeBlock(it.content, it.node, it.typography.code) { code, language, style ->
+                    CodeBlockWithCopy(
+                        code = code,
+                        language = language,
+                        onCopyCode = copyCodeToClipboard
+                    ) {
+                        HighlightedCodeContent(
+                            code = code,
+                            language = language,
+                            style = style,
+                            highlightsBuilder = highlightsBuilder
+                        )
+                    }
                 }
             },
             codeFence = {
-                CodeBlockWithCopy(
-                    code = it.content,
-                    textStyleSize = it.typography.code.fontSize,
-                    onCopyCode = copyCodeToClipboard
-                ) {
-                    MarkdownHighlightedCodeFence(
-                        it.content,
-                        it.node,
-                        it.typography.code,
-                        highlightsBuilder,
-                        false
-                    )
+                MarkdownCodeFence(it.content, it.node, it.typography.code) { code, language, style ->
+                    CodeBlockWithCopy(
+                        code = code,
+                        language = language,
+                        onCopyCode = copyCodeToClipboard
+                    ) {
+                        HighlightedCodeContent(
+                            code = code,
+                            language = language,
+                            style = style,
+                            highlightsBuilder = highlightsBuilder
+                        )
+                    }
                 }
             },
             paragraph = { model ->
@@ -169,13 +176,19 @@ fun ChatMarkdown(
             }
         )
     }
+    val markdownState = rememberMarkdownState(
+        content = combinedMarkdown,
+        retainState = true
+    )
+    val animations = markdownAnimations(animateTextSize = { this })
 
     Markdown(
-        combinedMarkdown,
+        markdownState = markdownState,
         inlineContent = markdownInlineContent(inlineContent),
         annotator = annotator,
         components = components,
-        typography = typography,
+        typography = chatMarkdownTypography(),
+        animations = animations,
         modifier = modifier
     )
 }
@@ -183,34 +196,113 @@ fun ChatMarkdown(
 @Composable
 private fun CodeBlockWithCopy(
     code: String,
-    textStyleSize: TextUnit,
+    language: String?,
     onCopyCode: (String) -> Unit,
     content: @Composable () -> Unit
 ) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = stringResource(R.string.code),
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = textStyleSize)
-            )
-            IconButton(
-                onClick = { onCopyCode(code) }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 2.dp,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    modifier = Modifier.size(20.dp),
-                    imageVector = ImageVector.vectorResource(R.drawable.ic_copy),
-                    contentDescription = stringResource(R.string.copy_code)
+                Text(
+                    modifier = Modifier.padding(end = 12.dp),
+                    text = language?.trim()?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.code),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                TextButton(
+                    modifier = Modifier.heightIn(min = 32.dp),
+                    onClick = { onCopyCode(code) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.copy_code),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                content()
             }
         }
-        Spacer(modifier = Modifier.size(4.dp))
-        content()
     }
+}
+
+@Composable
+private fun HighlightedCodeContent(
+    code: String,
+    language: String?,
+    style: TextStyle,
+    highlightsBuilder: Highlights.Builder
+) {
+    val highlightedCode by produceState(
+        initialValue = AnnotatedString(code),
+        key1 = code,
+        key2 = language,
+        key3 = highlightsBuilder
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildHighlightedAnnotatedString(code, language, highlightsBuilder)
+        }
+    }
+
+    Text(
+        text = highlightedCode,
+        style = style,
+        softWrap = false,
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+}
+
+private fun buildHighlightedAnnotatedString(
+    code: String,
+    language: String?,
+    highlightsBuilder: Highlights.Builder
+): AnnotatedString {
+    val syntaxLanguage = language?.let { SyntaxLanguage.getByName(it) }
+    val codeHighlights = highlightsBuilder
+        .code(code)
+        .let { if (syntaxLanguage != null) it.language(syntaxLanguage) else it }
+        .build()
+        .getHighlights()
+
+    return AnnotatedString.Builder(code).apply {
+        codeHighlights.forEach { highlight ->
+            val spanStyle = when (highlight) {
+                is ColorHighlight -> SpanStyle(color = androidx.compose.ui.graphics.Color(highlight.rgb).copy(alpha = 1f))
+                is BoldHighlight -> SpanStyle(fontWeight = FontWeight.Bold)
+            }
+            addStyle(
+                style = spanStyle,
+                start = highlight.location.start,
+                end = highlight.location.end
+            )
+        }
+    }.toAnnotatedString()
 }
 
 private fun appendTextWithInlineMath(
@@ -301,7 +393,7 @@ private fun DefaultParagraph(
     content: String,
     node: org.intellij.markdown.ast.ASTNode,
     style: TextStyle,
-    annotator: com.mikepenz.markdown.model.MarkdownAnnotator
+    annotator: MarkdownAnnotator
 ) {
     MarkdownParagraph(
         content,
@@ -323,119 +415,3 @@ private fun extractNodeText(
     content: String,
     node: org.intellij.markdown.ast.ASTNode
 ): String = content.substring(node.startOffset, node.endOffset)
-
-@Composable
-private fun InlineMathView(tex: String) {
-    MathViewContent(
-        renderedText = "\\($tex\\)",
-        modifier = Modifier
-    )
-}
-
-@Composable
-private fun DisplayMathView(
-    tex: String,
-    modifier: Modifier = Modifier
-) {
-    MathViewContent(
-        renderedText = "\\[$tex\\]",
-        modifier = modifier
-    )
-}
-
-@Composable
-private fun MathViewContent(
-    renderedText: String,
-    modifier: Modifier = Modifier
-) {
-    val textColor = LocalContentColor.current
-    val density = LocalDensity.current
-    val fontSize = MaterialTheme.typography.bodyMedium.fontSize
-        .takeIf { it.type != TextUnitType.Unspecified }
-        ?: 16.sp
-    val textSizePx = with(density) { fontSize.toPx() }.roundToInt()
-
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            runCatching {
-                MathView(context).apply {
-                    setBackgroundColor(Color.Transparent.toArgb())
-                    setViewBackgroundColor(Color.Transparent.toArgb())
-                    setClickable(false)
-                }
-            }.getOrElse {
-                createMathFallbackView(
-                    context = context,
-                    renderedText = renderedText,
-                    textColor = textColor.toArgb(),
-                    textSizePx = textSizePx
-                )
-            }
-        },
-        update = { view ->
-            when (view) {
-                is MathView -> runCatching {
-                    view.setTextColor(textColor.toArgb())
-                    view.setTextSize(textSizePx)
-                    view.setDisplayText(renderedText)
-                }.getOrElse {
-                    view.loadDataWithBaseURL(
-                        null,
-                        createMathFallbackHtml(renderedText, textColor.toArgb(), textSizePx),
-                        "text/html",
-                        "UTF-8",
-                        null
-                    )
-                }
-
-                is TextView -> {
-                    view.text = renderedText
-                    view.setTextColor(textColor.toArgb())
-                    view.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSizePx.toFloat())
-                }
-            }
-        }
-    )
-}
-
-private fun createMathFallbackView(
-    context: android.content.Context,
-    renderedText: String,
-    textColor: Int,
-    textSizePx: Int
-) = TextView(context).apply {
-    text = renderedText
-    setTextColor(textColor)
-    setTextSize(TypedValue.COMPLEX_UNIT_PX, textSizePx.toFloat())
-    setBackgroundColor(Color.Transparent.toArgb())
-}
-
-private fun createMathFallbackHtml(
-    renderedText: String,
-    textColor: Int,
-    textSizePx: Int
-): String = """
-    <html>
-      <body style="margin:0;padding:0;color:${formatColor(textColor)};font-size:${textSizePx}px;">
-        <pre style="margin:0;white-space:pre-wrap;">${escapeHtml(renderedText)}</pre>
-      </body>
-    </html>
-""".trimIndent()
-
-private fun formatColor(color: Int): String = String.format("#%06X", 0xFFFFFF and color)
-
-private fun escapeHtml(text: String): String = buildString(text.length) {
-    text.forEach { character ->
-        append(
-            when (character) {
-                '&' -> "&amp;"
-                '<' -> "&lt;"
-                '>' -> "&gt;"
-                '"' -> "&quot;"
-                '\'' -> "&#39;"
-                else -> character
-            }
-        )
-    }
-}

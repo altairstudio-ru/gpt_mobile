@@ -104,9 +104,6 @@ dependencies {
     implementation(libs.markdown.renderer)
     implementation(libs.markdown.renderer.m3)
     implementation(libs.markdown.renderer.code)
-    implementation(libs.katex.math.view) {
-        exclude(group = "com.android.support")
-    }
 
     // Navigation
     implementation(libs.hilt.navigation)

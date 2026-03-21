@@ -20,7 +20,6 @@ markdownRenderer = "0.39.2"
 serialization = "1.10.0" # Should not update due to kotlin version
 splashscreen = "1.2.0"
 room = "2.8.4"
-katexMathView = "1.0.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,7 +48,6 @@ markdown-renderer-code = { group = "com.mikepenz", name = "multiplatform-markdow
 hilt = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "androidxHilt" }
-katex-math-view = { group = "io.github.iffanmajid", name = "katexmathview", version.ref = "katexMathView" }
 kotlin-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 ktor-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }
