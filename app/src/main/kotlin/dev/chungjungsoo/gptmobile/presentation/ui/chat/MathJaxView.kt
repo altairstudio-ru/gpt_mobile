@@ -284,7 +284,7 @@ private fun MathJaxFormulaView(
         modifier = modifier,
         factory = { context -> MathJaxWebView(context) },
         onReset = { webView -> webView.prepareForReuse() },
-        onRelease = { webView -> webView.releaseResources() },
+        onRelease = { webView -> webView.releaseFromComposition() },
         update = { webView ->
             webView.contentDescription = request.tex
             webView.setRenderRequest(request, onMeasured)
@@ -359,12 +359,9 @@ private class MathJaxWebView(context: Context) : WebView(context) {
         renderRetryCount = 0
     }
 
-    fun releaseResources() {
+    fun releaseFromComposition() {
         prepareForReuse()
         renderedRequest = null
-        pageLoaded = false
-        loadUrl("about:blank")
-        destroy()
     }
 
     private fun renderPendingRequest() {
