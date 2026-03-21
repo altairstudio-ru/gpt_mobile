@@ -178,7 +178,7 @@ internal fun DisplayMathView(
         with(density) { fontSize.toPx().roundToInt() }
     }
     val minimumHeightPx = remember(fontSizePx) {
-        (fontSizePx * 2.4f).roundToInt()
+        estimateDisplayMathMinimumHeightPx(tex, fontSizePx)
     }
     val textColorCss = remember(textColor) {
         formatCssColor(textColor)
@@ -302,6 +302,15 @@ private class MathJaxWebView(context: Context) : WebView(context) {
                 return@evaluateJavascript
             }
 
+            if (
+                request.displayMode &&
+                measuredBounds.second <= request.minimumHeightPx &&
+                renderRetryCount < MAX_MATH_JAX_RENDER_RETRIES
+            ) {
+                scheduleRenderRetry()
+                return@evaluateJavascript
+            }
+
             renderedRequest = request
             pendingRequest = null
             renderRetryCount = 0
@@ -354,6 +363,34 @@ private fun formatCssColor(color: Color): String {
     val green = (color.green * 255).roundToInt()
     val blue = (color.blue * 255).roundToInt()
     return "rgba($red, $green, $blue, ${color.alpha})"
+}
+
+private fun estimateDisplayMathMinimumHeightPx(
+    tex: String,
+    fontSizePx: Int
+): Int {
+    val lineCount = tex.split("\\\\").size.coerceAtLeast(1)
+    val containsTallOperators = listOf(
+        "\\frac",
+        "\\dfrac",
+        "\\tfrac",
+        "\\sum",
+        "\\prod",
+        "\\int",
+        "\\oint",
+        "\\lim",
+        "\\begin",
+        "\\left",
+        "\\right",
+        "\\over"
+    ).any(tex::contains)
+    val baseEmHeight = when {
+        lineCount >= 3 -> 7.5f
+        lineCount == 2 -> 5.8f
+        containsTallOperators -> 4.8f
+        else -> 3.2f
+    }
+    return (fontSizePx * baseEmHeight).roundToInt()
 }
 
 private fun escapeJavaScriptString(text: String): String = buildString(text.length) {

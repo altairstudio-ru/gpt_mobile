@@ -162,14 +162,25 @@ fun ChatMarkdown(
             },
             paragraph = { model ->
                 val paragraphText = extractNodeText(model.content, model.node).trim()
-                val displayMath = displayMathByPlaceholder[paragraphText]
-                if (displayMath != null) {
-                    DisplayMathView(
-                        tex = displayMath.tex,
+                val displayMathBlocks = resolveDisplayMathParagraph(
+                    paragraphText = paragraphText,
+                    displayMathByPlaceholder = displayMathByPlaceholder
+                )
+                if (displayMathBlocks != null) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .wrapContentHeight()
-                    )
+                    ) {
+                        displayMathBlocks.forEach { displayMath ->
+                            DisplayMathView(
+                                tex = displayMath.tex,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight()
+                            )
+                        }
+                    }
                 } else {
                     DefaultParagraph(model.content, model.node, model.typography.paragraph, annotator)
                 }
@@ -339,6 +350,24 @@ private fun inlineMathHeight(tex: String) = when {
     tex.containsDisplaySizedMath() -> 3.2.em
     tex.containsSuperscriptOrSubscriptMath() -> 2.1.em
     else -> 1.6.em
+}
+
+private fun resolveDisplayMathParagraph(
+    paragraphText: String,
+    displayMathByPlaceholder: Map<String, ChatMarkdownBlock.DisplayMath>
+): List<ChatMarkdownBlock.DisplayMath>? {
+    if (paragraphText.isEmpty()) return null
+
+    val placeholders = displayMathByPlaceholder.keys
+        .filter(paragraphText::contains)
+    if (placeholders.isEmpty()) return null
+
+    val nonPlaceholderText = placeholders.fold(paragraphText) { current, placeholder ->
+        current.replace(placeholder, " ")
+    }
+    if (nonPlaceholderText.isNotBlank()) return null
+
+    return placeholders.mapNotNull(displayMathByPlaceholder::get)
 }
 
 private fun String.containsDisplaySizedMath(): Boolean = listOf(
