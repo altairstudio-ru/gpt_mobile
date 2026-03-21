@@ -1,6 +1,7 @@
 package dev.chungjungsoo.gptmobile.presentation.ui.chat
 
-import android.util.Log
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -68,9 +69,8 @@ class ChatViewModel @Inject constructor(
     private val _enabledPlatformsInApp = MutableStateFlow(listOf<PlatformV2>())
     val enabledPlatformsInApp = _enabledPlatformsInApp.asStateFlow()
 
-    // User input used for TextField
-    private val _question = MutableStateFlow("")
-    val question: StateFlow<String> = _question.asStateFlow()
+    // User input used for the chat composer
+    val question = TextFieldState()
 
     // Selected files for current message
     private val _selectedFiles = MutableStateFlow(listOf<String>())
@@ -102,8 +102,6 @@ class ChatViewModel @Inject constructor(
     val isLoaded = _isLoaded.asStateFlow()
 
     init {
-        Log.d("ViewModel", "$chatRoomId")
-        Log.d("ViewModel", "$enabledPlatformsInChat")
         fetchChatRoom()
         viewModelScope.launch { fetchMessages() }
         fetchEnabledPlatformsInApp()
@@ -123,15 +121,17 @@ class ChatViewModel @Inject constructor(
     }
 
     fun askQuestion() {
-        Log.d("Question: ", _question.value)
+        val questionText = question.text.toString()
+        if (questionText.isBlank()) return
+
         MessageV2(
             chatId = chatRoomId,
-            content = _question.value,
+            content = questionText,
             files = _selectedFiles.value,
             platformType = null,
             createdAt = currentTimeStamp
         ).let { addMessage(it) }
-        _question.update { "" }
+        question.clearText()
         clearSelectedFiles()
         completeChat()
     }
@@ -228,8 +228,6 @@ class ChatViewModel @Inject constructor(
             updatedIndex
         }
     }
-
-    fun updateQuestion(q: String) = _question.update { q }
 
     fun addSelectedFile(filePath: String) {
         _selectedFiles.update { currentFiles ->
@@ -414,7 +412,6 @@ class ChatViewModel @Inject constructor(
                     chatRepository.fetchChatListV2().first { it.id == chatRoomId }
                 }
             }
-            Log.d("ViewModel", "chatroom: ${chatRoom.value}")
         }
     }
 
@@ -456,8 +453,6 @@ class ChatViewModel @Inject constructor(
                     (_groupedMessages.value.userMessages.isNotEmpty() && _groupedMessages.value.assistantMessages.isNotEmpty()) &&
                     (_groupedMessages.value.userMessages.size == _groupedMessages.value.assistantMessages.size)
                 ) {
-                    Log.d("ChatViewModel", "GroupMessage: ${_groupedMessages.value}")
-
                     // Save the chat & chat room
                     _chatRoom.update {
                         chatRepository.saveChat(

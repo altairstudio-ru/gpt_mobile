@@ -33,6 +33,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -114,7 +117,6 @@ fun ChatScreen(
     val isEditQuestionDialogOpen by chatViewModel.isEditQuestionDialogOpen.collectAsStateWithLifecycle()
     val isSelectTextSheetOpen by chatViewModel.isSelectTextSheetOpen.collectAsStateWithLifecycle()
     val isLoaded by chatViewModel.isLoaded.collectAsStateWithLifecycle()
-    val question by chatViewModel.question.collectAsStateWithLifecycle()
     val selectedFiles by chatViewModel.selectedFiles.collectAsStateWithLifecycle()
     val appEnabledPlatforms by chatViewModel.enabledPlatformsInApp.collectAsStateWithLifecycle()
     val appAllPlatforms by chatViewModel.platformsInApp.collectAsStateWithLifecycle()
@@ -178,7 +180,6 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize(),
                     state = listState
                 ) {
-                    Log.d("ChatScreen", "GroupMessage: $groupedMessages")
                     groupedMessages.userMessages.forEachIndexed { i, message ->
                         // i: index of nth message
                         val platformIndexState = indexStates.getOrElse(i) { 0 }
@@ -280,10 +281,9 @@ fun ChatScreen(
             }
 
             ChatInputBox(
-                value = question,
-                onValueChange = { s -> chatViewModel.updateQuestion(s) },
+                inputState = chatViewModel.question,
                 chatEnabled = canUseChat,
-                sendButtonEnabled = question.trim().isNotBlank() && isIdle,
+                sendButtonEnabled = isIdle,
                 selectedFiles = selectedFiles,
                 onFileSelected = { filePath -> chatViewModel.addSelectedFile(filePath) },
                 onFileRemoved = { filePath -> chatViewModel.removeSelectedFile(filePath) }
@@ -501,19 +501,19 @@ private fun exportChat(context: Context, chatViewModel: ChatViewModel) {
 @Preview
 @Composable
 fun ChatInputBox(
-    value: String = "",
-    onValueChange: (String) -> Unit = {},
+    inputState: TextFieldState = rememberTextFieldState(),
     chatEnabled: Boolean = true,
     sendButtonEnabled: Boolean = true,
     selectedFiles: List<String> = emptyList(),
     onFileSelected: (String) -> Unit = {},
     onFileRemoved: (String) -> Unit = {},
-    onSendButtonClick: (String) -> Unit = {}
+    onSendButtonClick: () -> Unit = {}
 ) {
     val localStyle = LocalTextStyle.current
     val mergedStyle = localStyle.merge(TextStyle(color = LocalContentColor.current))
     val context = LocalContext.current
-    val chatInputMaxLines = 5
+    val chatInputLineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5)
+    val hasQuestionText = inputState.text.any { !it.isWhitespace() }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -536,14 +536,13 @@ fun ChatInputBox(
             )
         }
         BasicTextField(
-            value = value,
+            state = inputState,
+            modifier = Modifier.fillMaxWidth(),
             enabled = chatEnabled,
             textStyle = mergedStyle,
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            minLines = 1,
-            maxLines = chatInputMaxLines,
-            onValueChange = { if (chatEnabled) onValueChange(it) },
-            decorationBox = { innerTextField ->
+            lineLimits = chatInputLineLimits,
+            decorator = { innerTextField ->
                 Row(
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -565,9 +564,8 @@ fun ChatInputBox(
                         modifier = Modifier
                             .weight(1f)
                             .padding(start = 8.dp)
-                            .heightIn(max = 120.dp)
                     ) {
-                        if (value.isEmpty()) {
+                        if (inputState.text.isEmpty()) {
                             Text(
                                 modifier = Modifier.alpha(0.38f),
                                 text = if (chatEnabled) stringResource(R.string.ask_a_question) else stringResource(R.string.some_platforms_disabled)
@@ -578,8 +576,8 @@ fun ChatInputBox(
                         }
                     }
                     IconButton(
-                        enabled = chatEnabled && sendButtonEnabled,
-                        onClick = { onSendButtonClick(value) }
+                        enabled = chatEnabled && sendButtonEnabled && hasQuestionText,
+                        onClick = onSendButtonClick
                     ) {
                         Icon(imageVector = ImageVector.vectorResource(id = R.drawable.ic_send), contentDescription = stringResource(R.string.send))
                     }
