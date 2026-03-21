@@ -3,7 +3,9 @@ package dev.chungjungsoo.gptmobile.data.network
 import dev.chungjungsoo.gptmobile.data.dto.google.request.GenerateContentRequest
 import dev.chungjungsoo.gptmobile.data.dto.google.response.ErrorDetail
 import dev.chungjungsoo.gptmobile.data.dto.google.response.GenerateContentResponse
+import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.parameter
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
@@ -33,7 +35,7 @@ class GoogleAPIImpl @Inject constructor(
         this.apiUrl = url
     }
 
-    override fun streamGenerateContent(request: GenerateContentRequest, model: String): Flow<GenerateContentResponse> = flow {
+    override fun streamGenerateContent(request: GenerateContentRequest, model: String, timeoutSeconds: Int): Flow<GenerateContentResponse> = flow {
         try {
             val endpoint = if (apiUrl.endsWith("/")) {
                 "${apiUrl}v1beta/models/$model:streamGenerateContent"
@@ -42,6 +44,7 @@ class GoogleAPIImpl @Inject constructor(
             }
 
             networkClient().preparePost(endpoint) {
+                applyPlatformStreamingTimeout(timeoutSeconds)
                 parameter("key", token ?: "")
                 parameter("alt", "sse")
                 contentType(ContentType.Application.Json)
@@ -97,7 +100,8 @@ class GoogleAPIImpl @Inject constructor(
                 is java.net.UnknownHostException -> "Network error: Unable to resolve host."
                 is java.nio.channels.UnresolvedAddressException -> "Network error: Unable to resolve address. Check your internet connection."
                 is java.net.ConnectException -> "Network error: Connection refused. Check the API URL."
-                is java.net.SocketTimeoutException -> "Network error: Connection timed out."
+                is HttpRequestTimeoutException -> "Request timed out."
+                is java.net.SocketTimeoutException -> "Response timed out while waiting for the next chunk."
                 is javax.net.ssl.SSLException -> "Network error: SSL/TLS connection failed."
                 else -> e.message ?: "Unknown network error"
             }

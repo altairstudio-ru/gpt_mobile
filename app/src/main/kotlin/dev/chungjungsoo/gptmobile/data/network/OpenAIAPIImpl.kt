@@ -8,7 +8,9 @@ import dev.chungjungsoo.gptmobile.data.dto.openai.response.ErrorDetail
 import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponseErrorEvent
 import dev.chungjungsoo.gptmobile.data.dto.openai.response.ResponsesStreamEvent
 import dev.chungjungsoo.gptmobile.data.dto.openai.response.UnknownEvent
+import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.preparePost
@@ -39,11 +41,12 @@ class OpenAIAPIImpl @Inject constructor(
         this.apiUrl = url
     }
 
-    override fun streamChatCompletion(request: ChatCompletionRequest): Flow<ChatCompletionChunk> = flow {
+    override fun streamChatCompletion(request: ChatCompletionRequest, timeoutSeconds: Int): Flow<ChatCompletionChunk> = flow {
         try {
             val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/chat/completions" else "$apiUrl/v1/chat/completions"
 
             networkClient().preparePost(endpoint) {
+                applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
                 setBody(NetworkClient.openAIJson.encodeToJsonElement(request))
                 accept(ContentType.Text.EventStream)
@@ -95,7 +98,8 @@ class OpenAIAPIImpl @Inject constructor(
                 is java.net.UnknownHostException -> "Network error: Unable to resolve host."
                 is java.nio.channels.UnresolvedAddressException -> "Network error: Unable to resolve address. Check your internet connection."
                 is java.net.ConnectException -> "Network error: Connection refused. Check the API URL."
-                is java.net.SocketTimeoutException -> "Network error: Connection timed out."
+                is HttpRequestTimeoutException -> "Request timed out."
+                is java.net.SocketTimeoutException -> "Response timed out while waiting for the next chunk."
                 is javax.net.ssl.SSLException -> "Network error: SSL/TLS connection failed."
                 else -> e.message ?: "Unknown network error"
             }
@@ -110,11 +114,12 @@ class OpenAIAPIImpl @Inject constructor(
         }
     }
 
-    override fun streamResponses(request: ResponsesRequest): Flow<ResponsesStreamEvent> = flow {
+    override fun streamResponses(request: ResponsesRequest, timeoutSeconds: Int): Flow<ResponsesStreamEvent> = flow {
         try {
             val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/responses" else "$apiUrl/v1/responses"
 
             networkClient().preparePost(endpoint) {
+                applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
                 setBody(NetworkClient.openAIJson.encodeToJsonElement(request))
                 accept(ContentType.Text.EventStream)
@@ -157,7 +162,8 @@ class OpenAIAPIImpl @Inject constructor(
                 is java.net.UnknownHostException -> "Network error: Unable to resolve host."
                 is java.nio.channels.UnresolvedAddressException -> "Network error: Unable to resolve address. Check your internet connection."
                 is java.net.ConnectException -> "Network error: Connection refused. Check the API URL."
-                is java.net.SocketTimeoutException -> "Network error: Connection timed out."
+                is HttpRequestTimeoutException -> "Request timed out."
+                is java.net.SocketTimeoutException -> "Response timed out while waiting for the next chunk."
                 is javax.net.ssl.SSLException -> "Network error: SSL/TLS connection failed."
                 else -> e.message ?: "Unknown network error"
             }

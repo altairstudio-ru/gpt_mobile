@@ -178,7 +178,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Stream response
         flow {
             emit(ApiState.Loading)
-            openAIAPI.streamResponses(request).collect { event ->
+            openAIAPI.streamResponses(request, platform.timeout).collect { event ->
                 when (event) {
                     is ReasoningSummaryTextDeltaEvent -> {
                         emit(ApiState.Thinking(event.delta))
@@ -260,7 +260,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Stream response
         flow {
             emit(ApiState.Loading)
-            openAIAPI.streamChatCompletion(request).collect { chunk ->
+            openAIAPI.streamChatCompletion(request, platform.timeout).collect { chunk ->
                 when {
                     chunk.error != null -> emit(ApiState.Error(chunk.error.message))
 
@@ -396,7 +396,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Stream response
         flow {
             emit(ApiState.Loading)
-            anthropicAPI.streamChatMessage(request).collect { chunk ->
+            anthropicAPI.streamChatMessage(request, platform.timeout).collect { chunk ->
                 when (chunk) {
                     is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentDeltaResponseChunk -> {
                         when (chunk.delta.type) {
@@ -517,7 +517,7 @@ class ChatRepositoryImpl @Inject constructor(
         // Stream response
         flow {
             emit(ApiState.Loading)
-            googleAPI.streamGenerateContent(request, platform.model).collect { response ->
+            googleAPI.streamGenerateContent(request, platform.model, platform.timeout).collect { response ->
                 when {
                     response.error != null -> emit(ApiState.Error(response.error.message))
 

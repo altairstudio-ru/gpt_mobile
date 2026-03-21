@@ -9,6 +9,6 @@ import kotlinx.coroutines.flow.Flow
 interface OpenAIAPI {
     fun setToken(token: String?)
     fun setAPIUrl(url: String)
-    fun streamChatCompletion(request: ChatCompletionRequest): Flow<ChatCompletionChunk>
-    fun streamResponses(request: ResponsesRequest): Flow<ResponsesStreamEvent>
+    fun streamChatCompletion(request: ChatCompletionRequest, timeoutSeconds: Int): Flow<ChatCompletionChunk>
+    fun streamResponses(request: ResponsesRequest, timeoutSeconds: Int): Flow<ResponsesStreamEvent>
 }
