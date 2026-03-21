@@ -7,49 +7,119 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 private const val RESPONSE_STOPPED_PREFIX = "\n\n[Response stopped: "
+private const val STREAM_PUBLISH_INTERVAL_MILLIS = 50L
 
 suspend fun Flow<ApiState>.handleStates(
     messageFlow: MutableStateFlow<ChatViewModel.GroupedMessages>,
     platformIdx: Int,
     onLoadingComplete: () -> Unit
-) = collect { chunk ->
+) {
+    val buffer = StreamingMessageBuffer()
+
+    collect { chunk ->
     when (chunk) {
-        is ApiState.Thinking -> messageFlow.addThought(platformIdx, chunk.thinkingChunk)
+            is ApiState.Thinking -> {
+                buffer.appendThought(chunk.thinkingChunk)
+                buffer.publishIfDue(messageFlow, platformIdx)
+            }
 
-        is ApiState.Success -> messageFlow.addContent(platformIdx, chunk.textChunk)
+            is ApiState.Success -> {
+                buffer.appendContent(chunk.textChunk)
+                buffer.publishIfDue(messageFlow, platformIdx)
+            }
 
-        ApiState.Done -> {
-            messageFlow.setTimestamp(platformIdx)
-            onLoadingComplete()
+            ApiState.Done -> {
+                buffer.flush(messageFlow, platformIdx)
+                messageFlow.setTimestamp(platformIdx)
+                onLoadingComplete()
+            }
+
+            is ApiState.Error -> {
+                buffer.flush(messageFlow, platformIdx)
+                messageFlow.setErrorMessage(platformIdx, chunk.message)
+                onLoadingComplete()
+            }
+
+            else -> {}
         }
-
-        is ApiState.Error -> {
-            messageFlow.setErrorMessage(platformIdx, chunk.message)
-            onLoadingComplete()
-        }
-
-        else -> {}
     }
 }
 
-private fun MutableStateFlow<ChatViewModel.GroupedMessages>.addThought(platformIdx: Int, thought: String) {
-    update { groupedMessages ->
-        val updatedMessages = groupedMessages.assistantMessages.last().toMutableList()
-        updatedMessages[platformIdx] = updatedMessages[platformIdx].copy(
-            thoughts = updatedMessages[platformIdx].thoughts + thought
+private class StreamingMessageBuffer {
+    private val thoughts = StringBuilder()
+    private val content = StringBuilder()
+    private var lastPublishedAtNanos = 0L
+    private var publishedThoughtLength = 0
+    private var publishedContentLength = 0
+
+    fun appendThought(chunk: String) {
+        if (chunk.isNotEmpty()) {
+            thoughts.append(chunk)
+        }
+    }
+
+    fun appendContent(chunk: String) {
+        if (chunk.isNotEmpty()) {
+            content.append(chunk)
+        }
+    }
+
+    fun publishIfDue(
+        messageFlow: MutableStateFlow<ChatViewModel.GroupedMessages>,
+        platformIdx: Int
+    ) {
+        if (!hasPendingChanges()) return
+
+        val now = System.nanoTime()
+        if (lastPublishedAtNanos == 0L ||
+            now - lastPublishedAtNanos >= STREAM_PUBLISH_INTERVAL_MILLIS * 1_000_000
+        ) {
+            publish(messageFlow, platformIdx, now)
+        }
+    }
+
+    fun flush(
+        messageFlow: MutableStateFlow<ChatViewModel.GroupedMessages>,
+        platformIdx: Int
+    ) {
+        if (!hasPendingChanges()) return
+        publish(messageFlow, platformIdx, System.nanoTime())
+    }
+
+    private fun publish(
+        messageFlow: MutableStateFlow<ChatViewModel.GroupedMessages>,
+        platformIdx: Int,
+        publishedAtNanos: Long
+    ) {
+        messageFlow.setBufferedText(
+            platformIdx = platformIdx,
+            content = content.toString(),
+            thoughts = thoughts.toString()
         )
-        val assistantMessages = groupedMessages.assistantMessages.toMutableList()
-        assistantMessages[assistantMessages.lastIndex] = updatedMessages
+        publishedContentLength = content.length
+        publishedThoughtLength = thoughts.length
+        lastPublishedAtNanos = publishedAtNanos
+    }
 
-        groupedMessages.copy(assistantMessages = assistantMessages)
+    private fun hasPendingChanges(): Boolean {
+        return content.length != publishedContentLength || thoughts.length != publishedThoughtLength
     }
 }
 
-private fun MutableStateFlow<ChatViewModel.GroupedMessages>.addContent(platformIdx: Int, text: String) {
+private fun MutableStateFlow<ChatViewModel.GroupedMessages>.setBufferedText(
+    platformIdx: Int,
+    content: String,
+    thoughts: String
+) {
     update { groupedMessages ->
         val updatedMessages = groupedMessages.assistantMessages.last().toMutableList()
-        updatedMessages[platformIdx] = updatedMessages[platformIdx].copy(
-            content = updatedMessages[platformIdx].content + text
+        val currentMessage = updatedMessages[platformIdx]
+        if (currentMessage.content == content && currentMessage.thoughts == thoughts) {
+            return@update groupedMessages
+        }
+        updatedMessages[platformIdx] = currentMessage.copy(
+            content = content,
+            thoughts = thoughts
         )
         val assistantMessages = groupedMessages.assistantMessages.toMutableList()
         assistantMessages[assistantMessages.lastIndex] = updatedMessages
