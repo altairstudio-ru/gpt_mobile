@@ -17,7 +17,7 @@ suspend fun Flow<ApiState>.handleStates(
     val buffer = StreamingMessageBuffer()
 
     collect { chunk ->
-    when (chunk) {
+        when (chunk) {
             is ApiState.Thinking -> {
                 buffer.appendThought(chunk.thinkingChunk)
                 buffer.publishIfDue(messageFlow, platformIdx)
@@ -101,9 +101,7 @@ private class StreamingMessageBuffer {
         lastPublishedAtNanos = publishedAtNanos
     }
 
-    private fun hasPendingChanges(): Boolean {
-        return content.length != publishedContentLength || thoughts.length != publishedThoughtLength
-    }
+    private fun hasPendingChanges(): Boolean = content.length != publishedContentLength || thoughts.length != publishedThoughtLength
 }
 
 private fun MutableStateFlow<ChatViewModel.GroupedMessages>.setBufferedText(
