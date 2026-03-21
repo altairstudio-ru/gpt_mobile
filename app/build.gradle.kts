@@ -19,8 +19,8 @@ android {
         applicationId = "dev.chungjungsoo.gptmobile"
         minSdk = 31
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.7.2"
+        versionCode = 19
+        versionName = "0.7.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
