@@ -1,6 +1,5 @@
 package dev.chungjungsoo.gptmobile.presentation.ui.chat
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -127,7 +126,6 @@ fun OpponentChatBubble(
                 RichText(
                     modifier = Modifier
                         .padding(16.dp)
-                        .then(if (isLoading) Modifier.animateContentSize() else Modifier)
                 ) {
                     BasicMarkdown(astNode = astNode)
                 }
