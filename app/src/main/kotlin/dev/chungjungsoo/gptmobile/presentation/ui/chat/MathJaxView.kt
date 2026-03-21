@@ -84,6 +84,22 @@ svg {
 <script>
 window.mathJaxReady = false;
 window.MathJax = {
+  options: {
+    enableMenu: false,
+    enableEnrichment: false,
+    enableComplexity: false,
+    enableAssistiveMml: false,
+    enableSpeech: false,
+    enableBraille: false,
+    menuOptions: {
+      settings: {
+        enrich: false,
+        speech: false,
+        braille: false,
+        assistiveMml: false
+      }
+    }
+  },
   startup: {
     typeset: false,
     ready: () => {
@@ -294,8 +310,12 @@ private class MathJaxWebView(context: Context) : WebView(context) {
         onMeasured: (Int) -> Unit
     ) {
         this.onMeasured = onMeasured
-        if (request == renderedRequest && pendingRequest == null) return
+        if (request == renderedRequest && pendingRequest == null) {
+            alpha = 1f
+            return
+        }
 
+        alpha = 0f
         pendingRequest = request
         renderRetryCount = 0
         renderPendingRequest()
@@ -303,6 +323,7 @@ private class MathJaxWebView(context: Context) : WebView(context) {
 
     fun prepareForReuse() {
         removeCallbacks(renderRetryRunnable)
+        alpha = 0f
         pendingRequest = null
         onMeasured = null
         renderRetryCount = 0
@@ -345,6 +366,7 @@ private class MathJaxWebView(context: Context) : WebView(context) {
             pendingRequest = null
             renderRetryCount = 0
 
+            alpha = 1f
             onMeasured?.invoke(max(measuredBounds.second, request.minimumHeightPx))
         }
     }
