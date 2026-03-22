@@ -101,8 +101,9 @@ dependencies {
     implementation(libs.auto.license.ui)
 
     // Markdown
-    implementation(libs.compose.markdown)
-    implementation(libs.richtext)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
+    implementation(libs.markdown.renderer.code)
 
     // Navigation
     implementation(libs.hilt.navigation)

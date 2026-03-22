@@ -29,7 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +41,6 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.halilibo.richtext.commonmark.CommonmarkAstNodeParser
-import com.halilibo.richtext.markdown.BasicMarkdown
-import com.halilibo.richtext.ui.material3.RichText
 import dev.chungjungsoo.gptmobile.R
 import dev.chungjungsoo.gptmobile.presentation.theme.GPTMobileTheme
 import java.io.File
@@ -62,8 +58,6 @@ fun UserChatBubble(
         disabledContentColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f),
         disabledContainerColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.38f)
     )
-    val parser = remember { CommonmarkAstNodeParser() }
-    val astNode = remember(text) { parser.parse(text.trimIndent()) }
 
     Column(horizontalAlignment = Alignment.End) {
         Card(
@@ -74,9 +68,10 @@ fun UserChatBubble(
             shape = RoundedCornerShape(32.dp),
             colors = cardColor
         ) {
-            RichText(modifier = Modifier.padding(16.dp)) {
-                BasicMarkdown(astNode = astNode)
-            }
+            ChatMarkdown(
+                content = text,
+                modifier = Modifier.padding(16.dp)
+            )
         }
         UserFileThumbnailRow(files = files)
     }
@@ -90,6 +85,7 @@ fun OpponentChatBubble(
     isError: Boolean = false,
     text: String,
     thoughts: String = "",
+    contentIdentity: Any = text,
     onCopyClick: () -> Unit = {},
     onSelectClick: () -> Unit = {},
     onRetryClick: () -> Unit = {}
@@ -110,6 +106,7 @@ fun OpponentChatBubble(
             ThinkingBlock(
                 modifier = Modifier.padding(top = 16.dp, start = 8.dp, end = 8.dp),
                 thoughts = thoughts,
+                contentIdentity = contentIdentity,
                 isLoading = isThinking
             )
         }
@@ -119,16 +116,14 @@ fun OpponentChatBubble(
                 shape = RoundedCornerShape(0.dp),
                 colors = cardColor
             ) {
-                val parser = remember { CommonmarkAstNodeParser() }
-                val displayText = if (isLoading) text.trimIndent() + "●" else text.trimIndent()
-                val astNode = remember(displayText) { parser.parse(displayText) }
+                val displayText = if (isLoading) text + "●" else text
 
-                RichText(
+                ChatMarkdown(
+                    content = displayText,
+                    contentIdentity = contentIdentity,
                     modifier = Modifier
                         .padding(16.dp)
-                ) {
-                    BasicMarkdown(astNode = astNode)
-                }
+                )
             }
 
             if (!isLoading) {

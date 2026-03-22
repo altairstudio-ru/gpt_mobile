@@ -31,9 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.halilibo.richtext.commonmark.CommonmarkAstNodeParser
-import com.halilibo.richtext.markdown.BasicMarkdown
-import com.halilibo.richtext.ui.material3.RichText
 import dev.chungjungsoo.gptmobile.R
 import dev.chungjungsoo.gptmobile.presentation.theme.GPTMobileTheme
 
@@ -41,6 +38,7 @@ import dev.chungjungsoo.gptmobile.presentation.theme.GPTMobileTheme
 fun ThinkingBlock(
     modifier: Modifier = Modifier,
     thoughts: String,
+    contentIdentity: Any = thoughts,
     isLoading: Boolean = false
 ) {
     if (thoughts.isBlank()) return
@@ -104,17 +102,15 @@ fun ThinkingBlock(
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
-            val parser = remember { CommonmarkAstNodeParser() }
-            val displayText = if (isLoading) thoughts.trimIndent() + "●" else thoughts.trimIndent()
-            val astNode = remember(displayText) { parser.parse(displayText) }
+            val displayText = if (isLoading) thoughts + "●" else thoughts
 
-            RichText(
+            ChatMarkdown(
+                content = displayText,
+                contentIdentity = contentIdentity,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
-            ) {
-                BasicMarkdown(astNode = astNode)
-            }
+            )
         }
 
         if (!isExpanded && thoughts.isNotBlank()) {

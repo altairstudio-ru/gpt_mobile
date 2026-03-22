@@ -16,7 +16,7 @@ ktor = "3.4.1"
 material3 = "1.4.0"
 androidxHilt = "1.3.0"
 navigation = "2.9.7"
-markdown = "1.0.0-alpha03"
+markdownRenderer = "0.39.2"
 serialization = "1.10.0" # Should not update due to kotlin version
 splashscreen = "1.2.0"
 room = "2.8.4"
@@ -42,7 +42,9 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3",
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 auto-license-core = { group = "com.mikepenz", name = "aboutlibraries-core", version.ref = "autoLicense" }
 auto-license-ui = { group = "com.mikepenz", name = "aboutlibraries-compose-m3", version.ref = "autoLicense" }
-compose-markdown = { group = "com.halilibo.compose-richtext", name = "richtext-commonmark", version.ref = "markdown" }
+markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-android", version.ref = "markdownRenderer" }
+markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3-android", version.ref = "markdownRenderer" }
+markdown-renderer-code = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-code", version.ref = "markdownRenderer" }
 hilt = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 hilt-navigation = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "androidxHilt" }
@@ -53,7 +55,6 @@ ktor-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor"
 ktor-logging = { group = "io.ktor", name = "ktor-client-logging-jvm", version.ref = "ktor" }
 ktor-serialization = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
-richtext = { group = "com.halilibo.compose-richtext", name = "richtext-ui-material3", version.ref = "markdown"}
 room = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

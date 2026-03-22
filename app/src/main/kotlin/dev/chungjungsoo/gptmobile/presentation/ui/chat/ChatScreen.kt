@@ -356,6 +356,7 @@ private fun ChatMessagePair(
 ) {
     val assistantContent = assistantMessages.getOrNull(platformIndexState)?.content ?: ""
     val assistantThoughts = assistantMessages.getOrNull(platformIndexState)?.thoughts ?: ""
+    val selectedPlatformUid = enabledPlatformsInChat.getOrElse(platformIndexState) { "" }
     val isCurrentPlatformLoading =
         loadingStates.getOrElse(platformIndexState) { ChatViewModel.LoadingState.Idle } == ChatViewModel.LoadingState.Loading
     var isDropDownMenuExpanded by remember { mutableStateOf(false) }
@@ -424,6 +425,7 @@ private fun ChatMessagePair(
                 isLoading = isActiveMessage && isCurrentPlatformLoading,
                 text = assistantContent,
                 thoughts = assistantThoughts,
+                contentIdentity = "$messageIndex:$selectedPlatformUid",
                 onCopyClick = { onCopyText(assistantContent) },
                 onSelectClick = { onSelectText(assistantContent) },
                 onRetryClick = { onRetry(platformIndexState) }
