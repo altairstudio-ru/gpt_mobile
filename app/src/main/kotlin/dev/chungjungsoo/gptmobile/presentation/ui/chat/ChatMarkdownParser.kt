@@ -38,8 +38,13 @@ fun parseChatMarkdown(content: String): ParsedChatMarkdown {
         val backtickCount = detectBacktickRun(content, index)
         if (backtickCount > 0) {
             val codeEnd = findInlineCodeEnd(content, index + backtickCount, backtickCount)
-            markdownBuffer.append(content, index, codeEnd)
-            index = codeEnd
+            if (codeEnd == -1) {
+                markdownBuffer.append(content, index, index + backtickCount)
+                index += backtickCount
+            } else {
+                markdownBuffer.append(content, index, codeEnd)
+                index = codeEnd
+            }
             continue
         }
 
@@ -105,8 +110,13 @@ private fun replaceInlineMath(
         val backtickCount = detectBacktickRun(content, index)
         if (backtickCount > 0) {
             val codeEnd = findInlineCodeEnd(content, index + backtickCount, backtickCount)
-            output.append(content, index, codeEnd)
-            index = codeEnd
+            if (codeEnd == -1) {
+                output.append(content, index, index + backtickCount)
+                index += backtickCount
+            } else {
+                output.append(content, index, codeEnd)
+                index = codeEnd
+            }
             continue
         }
 
@@ -224,7 +234,7 @@ private fun findInlineCodeEnd(content: String, start: Int, backtickCount: Int): 
             index++
         }
     }
-    return content.length
+    return -1
 }
 
 private fun findClosingDelimiter(content: String, start: Int, delimiter: String): Int {
@@ -259,8 +269,6 @@ private fun findClosingInlineDollar(content: String, start: Int): Int {
 
 private fun createPlaceholder(index: Int): String = "$INLINE_MATH_PLACEHOLDER_PREFIX$index$INLINE_MATH_PLACEHOLDER_SUFFIX"
 
-private fun isLineStart(content: String, index: Int): Boolean = index == 0 || content[index - 1] == '\n'
-
 private fun isFenceStart(content: String, index: Int): Boolean {
     val lineStart = content.lastIndexOf('\n', index - 1).let { if (it == -1) 0 else it + 1 }
     val leadingSpaces = index - lineStart
@@ -279,7 +287,24 @@ private fun findFenceStartInLine(content: String, lineStart: Int, fence: String)
         leadingSpaces++
     }
 
-    return if (content.startsWith(fence, index)) index else -1
+    val marker = fence.first()
+    var fenceEnd = index
+    while (fenceEnd < content.length && content[fenceEnd] == marker) {
+        fenceEnd++
+    }
+
+    val fenceLength = fenceEnd - index
+    if (fenceLength < fence.length) return -1
+
+    val lineEnd = content.indexOf('\n', fenceEnd).let { if (it == -1) content.length else it }
+    for (current in fenceEnd until lineEnd) {
+        val character = content[current]
+        if (character != ' ' && character != '\t') {
+            return -1
+        }
+    }
+
+    return index
 }
 
 private fun isEscaped(content: String, index: Int): Boolean {

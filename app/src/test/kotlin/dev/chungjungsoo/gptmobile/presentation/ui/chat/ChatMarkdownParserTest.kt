@@ -98,6 +98,57 @@ class ChatMarkdownParserTest {
     }
 
     @Test
+    fun parseChatMarkdown_unmatchedInlineCodeBackticks_doNotConsumeTrailingMath() {
+        val parsed = parseChatMarkdown(
+            """
+            Start `unfinished code
+            Actual math: ${'$'}realMath${'$'}
+            """.trimIndent()
+        )
+
+        assertEquals(1, parsed.blocks.size)
+        assertEquals(1, parsed.inlineMath.size)
+        val markdown = parsed.blocks.single() as ChatMarkdownBlock.Markdown
+        assertTrue(markdown.content.contains("`unfinished code"))
+        assertTrue(markdown.content.contains(parsed.inlineMath.single().placeholder))
+    }
+
+    @Test
+    fun parseChatMarkdown_fenceInfoStringInsideFence_doesNotCloseFence() {
+        val parsed = parseChatMarkdown(
+            """
+            ```markdown
+            ```kotlin
+            ${'$'}${'$'}stillCode${'$'}${'$'}
+            ```
+            """.trimIndent()
+        )
+
+        assertTrue(parsed.inlineMath.isEmpty())
+        assertEquals(1, parsed.blocks.size)
+        val markdown = parsed.blocks.single() as ChatMarkdownBlock.Markdown
+        assertTrue(markdown.content.contains("```kotlin"))
+        assertTrue(markdown.content.contains("${'$'}${'$'}stillCode${'$'}${'$'}"))
+    }
+
+    @Test
+    fun parseChatMarkdown_longerClosingFence_closesFence() {
+        val parsed = parseChatMarkdown(
+            """
+            ```kotlin
+            val formula = "${'$'}${'$'}stillCode${'$'}${'$'}"
+            ````
+            After ${'$'}realMath${'$'}
+            """.trimIndent()
+        )
+
+        assertEquals(1, parsed.inlineMath.size)
+        val markdown = (parsed.blocks.single() as ChatMarkdownBlock.Markdown).content
+        assertTrue(markdown.contains("${'$'}${'$'}stillCode${'$'}${'$'}"))
+        assertTrue(markdown.contains(parsed.inlineMath.single().placeholder))
+    }
+
+    @Test
     fun buildCombinedMarkdown_displayMathAfterParagraph_isolatedIntoOwnParagraph() {
         val parsed = parseChatMarkdown(
             """
@@ -106,17 +157,10 @@ class ChatMarkdownParserTest {
             """.trimIndent()
         )
 
-        val combinedMarkdown = buildCombinedMarkdown(parsed.blocks)
+        val combinedMarkdown = buildCombinedMarkdown(parsed.blocks, nonce = "nonce")
 
-        assertTrue(
-            combinedMarkdown.contains(
-                """
-                **Forward Transform:**
-
-                CHAT_MATH_DISPLAY_0_TOKEN
-                """.trimIndent()
-            )
-        )
+        assertTrue(combinedMarkdown.contains("**Forward Transform:**"))
+        assertTrue(combinedMarkdown.contains("\uE000CHAT_MATH_DISPLAY_nonce_0_TOKEN\uE001"))
     }
 
     @Test

@@ -62,6 +62,7 @@ import dev.snipme.highlights.model.BoldHighlight
 import dev.snipme.highlights.model.ColorHighlight
 import dev.snipme.highlights.model.SyntaxLanguage
 import dev.snipme.highlights.model.SyntaxThemes
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,6 +70,7 @@ import kotlinx.coroutines.withContext
 private const val CLIPBOARD_LABEL_CODE = "code"
 private const val DISPLAY_MATH_PLACEHOLDER_PREFIX = "CHAT_MATH_DISPLAY_"
 private const val DISPLAY_MATH_PLACEHOLDER_SUFFIX = "_TOKEN"
+private const val DISPLAY_MATH_PLACEHOLDER_TEST_NONCE = "test"
 
 @Composable
 fun ChatMarkdown(
@@ -80,20 +82,21 @@ fun ChatMarkdown(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val parsed = remember(content) { parseChatMarkdown(content) }
+    val displayMathNonce = remember(content) { UUID.randomUUID().toString().replace("-", "") }
     val highlightsBuilder = remember(isDarkTheme) {
         Highlights.Builder().theme(SyntaxThemes.atom(isDarkTheme))
     }
-    val combinedMarkdown = remember(parsed.blocks) {
-        buildCombinedMarkdown(parsed.blocks)
+    val combinedMarkdown = remember(parsed.blocks, displayMathNonce) {
+        buildCombinedMarkdown(parsed.blocks, displayMathNonce)
     }
     val inlineMathByPlaceholder = remember(parsed.inlineMath) {
         parsed.inlineMath.associateBy { it.placeholder }
     }
-    val displayMathByPlaceholder = remember(parsed.blocks) {
+    val displayMathByPlaceholder = remember(parsed.blocks, displayMathNonce) {
         parsed.blocks
             .filterIsInstance<ChatMarkdownBlock.DisplayMath>()
             .mapIndexed { index, block ->
-                createDisplayMathPlaceholder(index) to block
+                createDisplayMathPlaceholder(index, displayMathNonce) to block
             }
             .toMap()
     }
@@ -391,12 +394,18 @@ private fun String.containsDisplaySizedMath(): Boolean = listOf(
 
 private fun String.containsSuperscriptOrSubscriptMath(): Boolean = contains('^') || contains('_')
 
-internal fun buildCombinedMarkdown(blocks: List<ChatMarkdownBlock>): String = buildString {
+internal fun buildCombinedMarkdown(
+    blocks: List<ChatMarkdownBlock>,
+    nonce: String = DISPLAY_MATH_PLACEHOLDER_TEST_NONCE
+): String = buildString {
     var displayMathIndex = 0
     blocks.forEach { block ->
         when (block) {
             is ChatMarkdownBlock.Markdown -> append(block.content)
-            is ChatMarkdownBlock.DisplayMath -> appendDisplayMathPlaceholder(createDisplayMathPlaceholder(displayMathIndex++))
+
+            is ChatMarkdownBlock.DisplayMath -> appendDisplayMathPlaceholder(
+                createDisplayMathPlaceholder(displayMathIndex++, nonce)
+            )
         }
     }
 }
@@ -431,7 +440,10 @@ private fun StringBuilder.currentLinePrefix(): String? {
     }
 }
 
-private fun createDisplayMathPlaceholder(index: Int): String = "$DISPLAY_MATH_PLACEHOLDER_PREFIX$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX"
+private fun createDisplayMathPlaceholder(
+    index: Int,
+    nonce: String
+): String = "\uE000$DISPLAY_MATH_PLACEHOLDER_PREFIX${nonce}_$index$DISPLAY_MATH_PLACEHOLDER_SUFFIX\uE001"
 
 @Composable
 private fun chatMarkdownTypography() = markdownTypography(
