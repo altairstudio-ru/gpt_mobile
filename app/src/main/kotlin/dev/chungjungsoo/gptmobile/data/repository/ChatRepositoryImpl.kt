@@ -292,11 +292,11 @@ class ChatRepositoryImpl @Inject constructor(
         message.files.forEach { fileUri ->
             val mimeType = FileUtils.getMimeType(context, fileUri)
             if (FileUtils.isImage(mimeType)) {
-                val base64 = FileUtils.readAndEncodeFile(context, fileUri)
-                if (base64 != null) {
+                val encodedImage = FileUtils.readAndEncodeImageForUpload(context, fileUri)
+                if (encodedImage != null) {
                     content.add(
                         OpenAIImageContent(
-                            imageUrl = ImageUrl(url = "data:$mimeType;base64,$base64")
+                            imageUrl = ImageUrl(url = "data:${encodedImage.mimeType};base64,${encodedImage.base64Data}")
                         )
                     )
                 }
@@ -337,10 +337,13 @@ class ChatRepositoryImpl @Inject constructor(
 
         // Add image content
         imageFiles.forEach { fileUri ->
-            val mimeType = FileUtils.getMimeType(context, fileUri)
-            val base64 = FileUtils.readAndEncodeFile(context, fileUri)
-            if (base64 != null) {
-                parts.add(ResponseContentPart.image("data:$mimeType;base64,$base64"))
+            val encodedImage = FileUtils.readAndEncodeImageForUpload(context, fileUri)
+            if (encodedImage != null) {
+                parts.add(
+                    ResponseContentPart.image(
+                        "data:${encodedImage.mimeType};base64,${encodedImage.base64Data}"
+                    )
+                )
             }
         }
 
@@ -445,13 +448,13 @@ class ChatRepositoryImpl @Inject constructor(
         message.files.forEach { fileUri ->
             val mimeType = FileUtils.getMimeType(context, fileUri)
             if (FileUtils.isImage(mimeType)) {
-                val base64 = FileUtils.readAndEncodeFile(context, fileUri)
-                if (base64 != null) {
+                val encodedImage = FileUtils.readAndEncodeImageForUpload(context, fileUri)
+                if (encodedImage != null) {
                     val mediaType = when {
-                        mimeType.contains("jpeg") || mimeType.contains("jpg") -> MediaType.JPEG
-                        mimeType.contains("png") -> MediaType.PNG
-                        mimeType.contains("gif") -> MediaType.GIF
-                        mimeType.contains("webp") -> MediaType.WEBP
+                        encodedImage.mimeType.contains("jpeg") || encodedImage.mimeType.contains("jpg") -> MediaType.JPEG
+                        encodedImage.mimeType.contains("png") -> MediaType.PNG
+                        encodedImage.mimeType.contains("gif") -> MediaType.GIF
+                        encodedImage.mimeType.contains("webp") -> MediaType.WEBP
                         else -> MediaType.JPEG // Default
                     }
 
@@ -460,7 +463,7 @@ class ChatRepositoryImpl @Inject constructor(
                             source = ImageSource(
                                 type = ImageSourceType.BASE64,
                                 mediaType = mediaType,
-                                data = base64
+                                data = encodedImage.base64Data
                             )
                         )
                     )
@@ -561,9 +564,9 @@ class ChatRepositoryImpl @Inject constructor(
         message.files.forEach { fileUri ->
             val mimeType = FileUtils.getMimeType(context, fileUri)
             if (FileUtils.isImage(mimeType)) {
-                val base64 = FileUtils.readAndEncodeFile(context, fileUri)
-                if (base64 != null) {
-                    parts.add(Part.inlineData(mimeType, base64))
+                val encodedImage = FileUtils.readAndEncodeImageForUpload(context, fileUri)
+                if (encodedImage != null) {
+                    parts.add(Part.inlineData(encodedImage.mimeType, encodedImage.base64Data))
                 }
             }
         }
