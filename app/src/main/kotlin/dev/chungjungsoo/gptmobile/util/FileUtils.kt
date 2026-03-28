@@ -4,15 +4,17 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Base64
-import android.util.Base64OutputStream
+import android.util.Log
 import android.webkit.MimeTypeMap
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.io.OutputStream
+import java.util.Base64
 
 object FileUtils {
+    private const val TAG = "FileUtils"
     private const val MAX_IMAGE_UPLOAD_DIMENSION = 2048
     private const val IMAGE_UPLOAD_QUALITY = 85
 
@@ -22,23 +24,40 @@ object FileUtils {
     )
 
     /**
-     * Read file from URI and encode to base64
+     * Read file from URI and encode it to base64 for upload.
+     *
+     * Image inputs may be downsampled and recompressed before encoding to reduce
+     * memory usage during request construction.
+     *
      * @param context Android context for ContentResolver
      * @param uriString File URI as string (content://, file://, or absolute path)
-     * @return Base64-encoded file content, or null if error
+     * @return Base64-encoded upload payload, or null if error
      */
     fun readAndEncodeFile(context: Context, uriString: String): String? = try {
         readAndEncodeImageForUpload(context, uriString)?.base64Data ?: encodeFileToBase64(context, uriString)
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Failed to encode file for upload: $uriString", e)
         null
     }
 
+    /**
+     * Read an image from URI and encode it to base64 for upload.
+     *
+     * Animated/vector formats that should not be recompressed are streamed as-is.
+     * Other image formats may be downsampled and recompressed to lower memory use.
+     */
     fun readAndEncodeImageForUpload(context: Context, uriString: String): EncodedImage? = try {
         val mimeType = getMimeType(context, uriString)
+        readAndEncodeImageForUpload(context, uriString, mimeType)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to encode image for upload: $uriString", e)
+        null
+    }
+
+    internal fun readAndEncodeImageForUpload(context: Context, uriString: String, mimeType: String): EncodedImage? {
         if (!isImage(mimeType)) return null
 
-        when (mimeType) {
+        return when (mimeType) {
             "image/gif", "image/svg+xml" -> {
                 encodeFileToBase64(context, uriString)?.let { base64 ->
                     EncodedImage(mimeType = mimeType, base64Data = base64)
@@ -52,9 +71,6 @@ object FileUtils {
                     }
             }
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
     }
 
     /**
@@ -81,7 +97,7 @@ object FileUtils {
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Failed to open input stream for: $uriString", e)
         null
     }
 
@@ -189,7 +205,7 @@ object FileUtils {
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(TAG, "Failed to get file size for: $uriString", e)
         -1L
     }
 
@@ -222,6 +238,21 @@ object FileUtils {
         return sampleSize
     }
 
+    internal fun shouldPreserveAlpha(mimeType: String): Boolean = mimeType.contains("png") || mimeType.contains("webp")
+
+    internal fun encodeToBase64(writeBytes: (OutputStream) -> Boolean): String? {
+        val outputStream = ByteArrayOutputStream()
+        val success = Base64.getEncoder().wrap(outputStream).use { base64Stream ->
+            writeBytes(base64Stream)
+        }
+
+        return if (success) {
+            outputStream.toString(Charsets.UTF_8.name())
+        } else {
+            null
+        }
+    }
+
     private fun readAndEncodeScaledImage(context: Context, uriString: String, mimeType: String): EncodedImage? {
         val boundsOptions = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -236,7 +267,7 @@ object FileUtils {
         val (compressFormat, uploadMimeType) = resolveImageCompressFormat(mimeType)
         val decodeOptions = BitmapFactory.Options().apply {
             inSampleSize = calculateImageInSampleSize(boundsOptions.outWidth, boundsOptions.outHeight)
-            inPreferredConfig = if (compressFormat == Bitmap.CompressFormat.PNG) {
+            inPreferredConfig = if (shouldPreserveAlpha(uploadMimeType)) {
                 Bitmap.Config.ARGB_8888
             } else {
                 Bitmap.Config.RGB_565
@@ -248,11 +279,13 @@ object FileUtils {
         } ?: return null
 
         return try {
-            val outputStream = ByteArrayOutputStream()
-            bitmap.compress(compressFormat, IMAGE_UPLOAD_QUALITY, outputStream)
+            val base64Data = encodeToBase64 { outputStream ->
+                bitmap.compress(compressFormat, IMAGE_UPLOAD_QUALITY, outputStream)
+            } ?: return null
+
             EncodedImage(
                 mimeType = uploadMimeType,
-                base64Data = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+                base64Data = base64Data
             )
         } finally {
             bitmap.recycle()
@@ -262,7 +295,7 @@ object FileUtils {
     private fun encodeFileToBase64(context: Context, uriString: String): String? {
         val outputStream = ByteArrayOutputStream()
         getInputStreamFromUri(context, uriString)?.use { inputStream ->
-            Base64OutputStream(outputStream, Base64.NO_WRAP).use { base64Stream ->
+            Base64.getEncoder().wrap(outputStream).use { base64Stream ->
                 inputStream.copyTo(base64Stream)
             }
         } ?: return null
