@@ -29,6 +29,18 @@ class FileUtilsTest {
     }
 
     @Test
+    fun `draft upload limit is enforced across all selected attachments`() {
+        assertTrue(FileUtils.wouldExceedTotalUploadLimit(45L * 1024 * 1024, 6L * 1024 * 1024))
+        assertFalse(FileUtils.wouldExceedTotalUploadLimit(40L * 1024 * 1024, 5L * 1024 * 1024))
+    }
+
+    @Test
+    fun `non image mime types are not supported by image upload pipeline`() {
+        assertTrue(FileUtils.isSupportedUploadMimeType("image/jpeg"))
+        assertFalse(FileUtils.isSupportedUploadMimeType("application/pdf"))
+    }
+
+    @Test
     fun `transparent upload formats preserve alpha capable bitmap config`() {
         assertTrue(FileUtils.shouldPreserveAlpha("image/png"))
         assertTrue(FileUtils.shouldPreserveAlpha("image/webp"))

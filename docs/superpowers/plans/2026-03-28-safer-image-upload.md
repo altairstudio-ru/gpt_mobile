@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Add attachment draft models and preprocessing utilities
+## Task 1: Add attachment draft models and preprocessing utilities
 
 **Files:**
 - Create: `app/src/main/kotlin/dev/chungjungsoo/gptmobile/presentation/ui/chat/ChatAttachmentDraft.kt`
@@ -23,7 +23,7 @@
 - [ ] Run: `./gradlew :app:testDebugUnitTest --tests "dev.chungjungsoo.gptmobile.util.FileUtilsTest"`
 - [ ] Commit the utility/model changes.
 
-### Task 2: Move chat draft state from raw file paths to attachment drafts
+## Task 2: Move chat draft state from raw file paths to attachment drafts
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/chungjungsoo/gptmobile/presentation/ui/chat/ChatViewModel.kt`
@@ -39,7 +39,7 @@
 - [ ] Run the smallest relevant verification command for changed tests or compile.
 - [ ] Commit the draft-state/UI changes.
 
-### Task 3: Make send wait for attachment readiness and persist prepared file paths
+## Task 3: Make send wait for attachment readiness and persist prepared file paths
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/chungjungsoo/gptmobile/presentation/ui/chat/ChatViewModel.kt`
@@ -54,7 +54,7 @@
 - [ ] Run targeted unit tests.
 - [ ] Commit the send-gating changes.
 
-### Task 4: Update repository request building to use prepared payloads/files on background dispatchers
+## Task 4: Update repository request building to use prepared payloads/files on background dispatchers
 
 **Files:**
 - Modify: `app/src/main/kotlin/dev/chungjungsoo/gptmobile/data/repository/ChatRepositoryImpl.kt`
@@ -68,7 +68,7 @@
 - [ ] Run targeted tests plus compile if needed.
 - [ ] Commit the repository changes.
 
-### Task 5: Verify end-to-end behavior
+## Task 5: Verify end-to-end behavior
 
 **Files:**
 - Modify any files needed from earlier tasks

@@ -3,6 +3,7 @@ package dev.chungjungsoo.gptmobile.presentation.ui.chat
 import android.content.Context
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -133,13 +134,15 @@ class ChatViewModel @Inject constructor(
 
     fun askQuestion() {
         val questionText = question.text.toString()
-        if (questionText.isBlank()) return
+        val hasReadyAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Ready }
+        val hasPreparingAttachments = _selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Preparing }
+        if (questionText.isBlank() && !hasReadyAttachments && !hasPreparingAttachments) return
         if (_selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Failed }) {
             _attachmentNotice.update { "Remove failed attachments before sending." }
             return
         }
 
-        if (_selectedAttachments.value.any { it.status == ChatAttachmentDraft.Status.Preparing }) {
+        if (hasPreparingAttachments) {
             pendingQuestionText = questionText
             question.clearText()
             _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Loading } }
@@ -148,6 +151,11 @@ class ChatViewModel @Inject constructor(
         }
 
         sendQuestion(questionText, _selectedAttachments.value)
+    }
+
+    override fun onCleared() {
+        AttachmentPayloadCache.clear()
+        super.onCleared()
     }
 
     fun closeChatTitleDialog() = _isChatTitleDialogOpen.update { false }
@@ -257,6 +265,7 @@ class ChatViewModel @Inject constructor(
     fun removeSelectedFile(filePath: String) {
         val removedAttachment = _selectedAttachments.value.firstOrNull { it.sourceFilePath == filePath }
         removedAttachment?.preparedFilePath?.let { AttachmentPayloadCache.remove(it) }
+        removedAttachment?.let(::deleteDraftFiles)
         _selectedAttachments.update { currentFiles ->
             currentFiles.filter { it.sourceFilePath != filePath }
         }
@@ -264,6 +273,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun clearSelectedFiles() {
+        _selectedAttachments.value.forEach { attachment ->
+            attachment.preparedFilePath?.let { AttachmentPayloadCache.remove(it) }
+        }
         _selectedAttachments.update { emptyList() }
     }
 
@@ -374,15 +386,35 @@ class ChatViewModel @Inject constructor(
 
     private fun preprocessAttachment(filePath: String) {
         viewModelScope.launch {
+            val mimeType = withContext(Dispatchers.IO) {
+                FileUtils.getMimeType(context, filePath)
+            }
+
+            if (!FileUtils.isSupportedUploadMimeType(mimeType)) {
+                rejectAttachment(filePath, "Only image attachments are currently supported.")
+                trySendPendingQuestionIfReady()
+                return@launch
+            }
+
             val fileSize = withContext(Dispatchers.IO) {
                 FileUtils.getFileSize(context, filePath)
             }
 
             if (fileSize > FileUtils.MAX_UPLOAD_SIZE_BYTES) {
-                _selectedAttachments.update { attachments ->
-                    attachments.filter { it.sourceFilePath != filePath }
-                }
-                _attachmentNotice.update { "Files larger than 50 MB cannot be attached." }
+                rejectAttachment(filePath, "Files larger than 50 MB cannot be attached.")
+                trySendPendingQuestionIfReady()
+                return@launch
+            }
+
+            val currentDraftBytes = withContext(Dispatchers.IO) {
+                _selectedAttachments.value
+                    .filter { it.sourceFilePath != filePath }
+                    .sumOf { FileUtils.getFileSize(context, it.sourceFilePath).coerceAtLeast(0L) }
+            }
+
+            if (FileUtils.wouldExceedTotalUploadLimit(currentDraftBytes, fileSize)) {
+                rejectAttachment(filePath, "Total attachments cannot exceed 50 MB.")
+                trySendPendingQuestionIfReady()
                 return@launch
             }
 
@@ -393,6 +425,13 @@ class ChatViewModel @Inject constructor(
                     preparedAttachment.preparedFilePath,
                     preparedAttachment.mimeType
                 ) ?: return@withContext null
+
+                if (_selectedAttachments.value.none { it.sourceFilePath == filePath }) {
+                    if (preparedAttachment.preparedFilePath != filePath) {
+                        java.io.File(preparedAttachment.preparedFilePath).delete()
+                    }
+                    return@withContext null
+                }
 
                 AttachmentPayloadCache.put(preparedAttachment.preparedFilePath, encodedImage)
                 preparedAttachment
@@ -438,12 +477,19 @@ class ChatViewModel @Inject constructor(
         val attachments = _selectedAttachments.value
 
         if (attachments.any { it.status == ChatAttachmentDraft.Status.Failed }) {
+            restoreQueuedQuestion(queuedQuestion)
             pendingQuestionText = null
             _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Idle } }
             return
         }
 
         if (attachments.any { it.status == ChatAttachmentDraft.Status.Preparing }) {
+            return
+        }
+
+        if (queuedQuestion.isBlank() && attachments.none { it.status == ChatAttachmentDraft.Status.Ready }) {
+            pendingQuestionText = null
+            _loadingStates.update { List(enabledPlatformsInChat.size) { LoadingState.Idle } }
             return
         }
 
@@ -462,6 +508,28 @@ class ChatViewModel @Inject constructor(
         question.clearText()
         clearSelectedFiles()
         completeChat()
+    }
+
+    private fun rejectAttachment(filePath: String, notice: String) {
+        val rejectedAttachment = _selectedAttachments.value.firstOrNull { it.sourceFilePath == filePath }
+        rejectedAttachment?.preparedFilePath?.let { AttachmentPayloadCache.remove(it) }
+        rejectedAttachment?.let(::deleteDraftFiles)
+        _selectedAttachments.update { attachments ->
+            attachments.filter { it.sourceFilePath != filePath }
+        }
+        _attachmentNotice.update { notice }
+    }
+
+    private fun restoreQueuedQuestion(questionText: String) {
+        if (questionText.isBlank()) return
+        question.setTextAndPlaceCursorAtEnd(questionText)
+    }
+
+    private fun deleteDraftFiles(attachment: ChatAttachmentDraft) {
+        java.io.File(attachment.sourceFilePath).delete()
+        attachment.preparedFilePath
+            ?.takeIf { it != attachment.sourceFilePath }
+            ?.let { java.io.File(it).delete() }
     }
 
     private fun formatCurrentDateTime(): String {

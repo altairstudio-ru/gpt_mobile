@@ -578,6 +578,7 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getEncodedAttachment(filePath: String, mimeType: String): FileUtils.EncodedImage? {
+        if (!FileUtils.isSupportedUploadMimeType(mimeType)) return null
         AttachmentPayloadCache.get(filePath)?.let { return it }
 
         return withContext(Dispatchers.IO) {

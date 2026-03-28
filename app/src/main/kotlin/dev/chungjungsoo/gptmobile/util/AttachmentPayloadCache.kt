@@ -1,17 +1,33 @@
 package dev.chungjungsoo.gptmobile.util
 
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 
 object AttachmentPayloadCache {
-    private val payloads = ConcurrentHashMap<String, FileUtils.EncodedImage>()
+    internal const val MAX_ENTRIES: Int = 32
 
-    fun get(filePath: String): FileUtils.EncodedImage? = payloads[filePath]
+    private val payloads = object : LinkedHashMap<String, FileUtils.EncodedImage>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FileUtils.EncodedImage>?): Boolean = size > MAX_ENTRIES
+    }
+
+    fun get(filePath: String): FileUtils.EncodedImage? = synchronized(this) {
+        payloads[filePath]
+    }
 
     fun put(filePath: String, payload: FileUtils.EncodedImage) {
-        payloads[filePath] = payload
+        synchronized(this) {
+            payloads[filePath] = payload
+        }
     }
 
     fun remove(filePath: String) {
-        payloads.remove(filePath)
+        synchronized(this) {
+            payloads.remove(filePath)
+        }
+    }
+
+    internal fun clear() {
+        synchronized(this) {
+            payloads.clear()
+        }
     }
 }

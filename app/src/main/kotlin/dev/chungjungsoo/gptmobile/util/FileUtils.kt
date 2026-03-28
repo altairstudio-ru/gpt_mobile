@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
 import java.io.ByteArrayOutputStream
@@ -69,7 +70,7 @@ object FileUtils {
     fun prepareAttachmentForUpload(context: Context, filePath: String): AttachmentPreparationResult? {
         val mimeType = getMimeType(context, filePath)
         if (!validateFileSize(context, filePath, MAX_UPLOAD_SIZE_BYTES)) return null
-        if (!isImage(mimeType) || mimeType == "image/gif" || mimeType == "image/svg+xml") {
+        if (!isSupportedUploadMimeType(mimeType) || mimeType == "image/gif" || mimeType == "image/svg+xml") {
             return AttachmentPreparationResult(
                 preparedFilePath = filePath,
                 mimeType = mimeType,
@@ -252,6 +253,14 @@ object FileUtils {
         return size in 1..maxSizeBytes
     }
 
+    internal fun wouldExceedTotalUploadLimit(
+        currentTotalBytes: Long,
+        newFileBytes: Long,
+        maxSizeBytes: Long = MAX_UPLOAD_SIZE_BYTES
+    ): Boolean = currentTotalBytes + newFileBytes > maxSizeBytes
+
+    internal fun isSupportedUploadMimeType(mimeType: String): Boolean = isImage(mimeType)
+
     internal fun shouldResizeImage(
         originalWidth: Int,
         originalHeight: Int,
@@ -321,9 +330,10 @@ object FileUtils {
         } ?: return null
 
         return try {
-            val sourceFile = File(uriString.removePrefix("file://"))
+            val sourceFileName = resolveSourceFileName(context, uriString)
+            val sourceFile = File(sourceFileName)
             val resizedFile = File(
-                sourceFile.parentFile ?: File("."),
+                context.cacheDir,
                 "${sourceFile.nameWithoutExtension}_upload.${uploadMimeType.substringAfter('/')}"
             )
             resizedFile.outputStream().use { outputStream ->
@@ -338,6 +348,27 @@ object FileUtils {
         } finally {
             bitmap.recycle()
         }
+    }
+
+    private fun resolveSourceFileName(context: Context, uriString: String): String {
+        if (!uriString.startsWith("content://")) {
+            return File(uriString.removePrefix("file://")).name
+        }
+
+        return runCatching {
+            context.contentResolver.query(Uri.parse(uriString), arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    val displayNameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (displayNameIndex >= 0 && cursor.moveToFirst()) {
+                        cursor.getString(displayNameIndex)
+                    } else {
+                        null
+                    }
+                }
+        }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: Uri.parse(uriString).lastPathSegment
+            ?: "attachment_${System.currentTimeMillis()}"
     }
 
     private fun encodeFileToBase64(context: Context, uriString: String): String? {
