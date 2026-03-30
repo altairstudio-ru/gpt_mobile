@@ -2,6 +2,9 @@ package dev.chungjungsoo.gptmobile.data.database
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.chungjungsoo.gptmobile.data.database.entity.ChatAttachmentListConverter
+import dev.chungjungsoo.gptmobile.data.model.ChatAttachment
+import java.io.File
 
 object ChatDatabaseV2Migrations {
 
@@ -54,5 +57,88 @@ object ChatDatabaseV2Migrations {
                 }
             }
         }
+    }
+
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `messages_v2_new` (
+                    `message_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `chat_id` INTEGER NOT NULL,
+                    `thoughts` TEXT NOT NULL,
+                    `content` TEXT NOT NULL,
+                    `attachments` TEXT NOT NULL,
+                    `revisions` TEXT NOT NULL,
+                    `linked_message_id` INTEGER NOT NULL,
+                    `platform_type` TEXT,
+                    `created_at` INTEGER NOT NULL,
+                    FOREIGN KEY(`chat_id`) REFERENCES `chats_v2`(`chat_id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+
+            db.execSQL(
+                """
+                INSERT INTO `messages_v2_new` (
+                    `message_id`,
+                    `chat_id`,
+                    `thoughts`,
+                    `content`,
+                    `attachments`,
+                    `revisions`,
+                    `linked_message_id`,
+                    `platform_type`,
+                    `created_at`
+                )
+                SELECT
+                    `message_id`,
+                    `chat_id`,
+                    `thoughts`,
+                    `content`,
+                    '' as `attachments`,
+                    `revisions`,
+                    `linked_message_id`,
+                    `platform_type`,
+                    `created_at`
+                FROM `messages_v2`
+                """.trimIndent()
+            )
+
+            db.query("SELECT message_id, files FROM messages_v2").use { messageCursor ->
+                val messageIdIndex = messageCursor.getColumnIndexOrThrow("message_id")
+                val filesIndex = messageCursor.getColumnIndexOrThrow("files")
+                while (messageCursor.moveToNext()) {
+                    val messageId = messageCursor.getInt(messageIdIndex)
+                    val filesValue = messageCursor.getString(filesIndex).orEmpty()
+                    db.execSQL(
+                        "UPDATE messages_v2_new SET attachments = ? WHERE message_id = ?",
+                        arrayOf<Any>(legacyFilesToAttachmentsJson(filesValue), messageId)
+                    )
+                }
+            }
+
+            db.execSQL("DROP TABLE `messages_v2`")
+            db.execSQL("ALTER TABLE `messages_v2_new` RENAME TO `messages_v2`")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_messages_v2_chat_id` ON `messages_v2` (`chat_id`)")
+        }
+    }
+
+    internal fun legacyFilesToAttachmentsJson(filesValue: String): String {
+        val attachments = filesValue
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .map { filePath ->
+                ChatAttachment(
+                    localFilePath = filePath,
+                    preparedFilePath = filePath,
+                    displayName = File(filePath).name,
+                    mimeType = "",
+                    sizeBytes = 0L
+                )
+            }
+
+        return ChatAttachmentListConverter().fromList(attachments)
     }
 }

@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import dev.chungjungsoo.gptmobile.data.model.ChatAttachment
 
 @Entity(
     tableName = "messages_v2",
@@ -32,8 +33,8 @@ data class MessageV2(
     @ColumnInfo(name = "content")
     val content: String,
 
-    @ColumnInfo(name = "files")
-    val files: List<String> = listOf(),
+    @ColumnInfo(name = "attachments")
+    val attachments: List<ChatAttachment> = listOf(),
 
     @ColumnInfo(name = "revisions")
     val revisions: List<String> = listOf(),

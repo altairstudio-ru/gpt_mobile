@@ -57,6 +57,7 @@ object DatabaseModule {
         ChatDatabaseV2::class.java,
         DB_NAME_V2
     ).addMigrations(
-        ChatDatabaseV2Migrations.MIGRATION_1_2
+        ChatDatabaseV2Migrations.MIGRATION_1_2,
+        ChatDatabaseV2Migrations.MIGRATION_2_3
     ).build()
 }
