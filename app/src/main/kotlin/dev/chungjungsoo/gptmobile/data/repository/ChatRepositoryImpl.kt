@@ -56,6 +56,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onCompletion
@@ -139,74 +140,63 @@ class ChatRepositoryImpl @Inject constructor(
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2
     ): Flow<ApiState> = try {
-        // Configure API
         openAIAPI.setToken(platform.token)
         openAIAPI.setAPIUrl(platform.apiUrl)
 
-        // Build input messages for Responses API
-        val inputMessages = mutableListOf<ResponseInputMessage>()
+        streamPreparedApiState(
+            prepare = {
+                val inputMessages = mutableListOf<ResponseInputMessage>()
 
-        // Add conversation history (interleaved user and assistant messages)
-        userMessages.forEachIndexed { index, userMsg ->
-            // Add user message with text and/or images
-            inputMessages.add(transformMessageV2ToResponsesInput(userMsg, isUser = true))
+                userMessages.forEachIndexed { index, userMsg ->
+                    inputMessages.add(transformMessageV2ToResponsesInput(userMsg, isUser = true))
 
-            // Add assistant response if available (only include this platform's response)
-            if (index < assistantMessages.size) {
-                assistantMessages[index]
-                    .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
-                    ?.let { assistantMsg ->
-                        inputMessages.add(transformMessageV2ToResponsesInput(assistantMsg, isUser = false))
+                    if (index < assistantMessages.size) {
+                        assistantMessages[index]
+                            .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
+                            ?.let { assistantMsg ->
+                                inputMessages.add(transformMessageV2ToResponsesInput(assistantMsg, isUser = false))
+                            }
                     }
-            }
-        }
+                }
 
-        // Create request - include reasoning config only when reasoning is enabled
-        val request = ResponsesRequest(
-            model = platform.model,
-            input = inputMessages,
-            stream = true,
-            instructions = platform.systemPrompt?.takeIf { it.isNotBlank() },
-            temperature = if (platform.reasoning) null else platform.temperature,
-            topP = if (platform.reasoning) null else platform.topP,
-            reasoning = if (platform.reasoning) {
-                ReasoningConfig(
-                    effort = "medium",
-                    summary = "auto"
+                ResponsesRequest(
+                    model = platform.model,
+                    input = inputMessages,
+                    stream = true,
+                    instructions = platform.systemPrompt?.takeIf { it.isNotBlank() },
+                    temperature = if (platform.reasoning) null else platform.temperature,
+                    topP = if (platform.reasoning) null else platform.topP,
+                    reasoning = if (platform.reasoning) {
+                        ReasoningConfig(
+                            effort = "medium",
+                            summary = "auto"
+                        )
+                    } else {
+                        null
+                    }
                 )
-            } else {
-                null
-            }
-        )
+            },
+            stream = { request ->
+                flow {
+                    openAIAPI.streamResponses(request, platform.timeout).collect { event ->
+                        when (event) {
+                            is ReasoningSummaryTextDeltaEvent -> emit(ApiState.Thinking(event.delta))
 
-        // Stream response
-        flow {
-            emit(ApiState.Loading)
-            openAIAPI.streamResponses(request, platform.timeout).collect { event ->
-                when (event) {
-                    is ReasoningSummaryTextDeltaEvent -> {
-                        emit(ApiState.Thinking(event.delta))
-                    }
+                            is OutputTextDeltaEvent -> emit(ApiState.Success(event.delta))
 
-                    is OutputTextDeltaEvent -> {
-                        emit(ApiState.Success(event.delta))
-                    }
+                            is ResponseFailedEvent -> {
+                                val errorMessage = event.response.error?.message ?: "Response failed"
+                                emit(ApiState.Error(errorMessage))
+                            }
 
-                    is ResponseFailedEvent -> {
-                        val errorMessage = event.response.error?.message ?: "Response failed"
-                        emit(ApiState.Error(errorMessage))
-                    }
+                            is ResponseErrorEvent -> emit(ApiState.Error(event.message))
 
-                    is ResponseErrorEvent -> {
-                        emit(ApiState.Error(event.message))
-                    }
-
-                    else -> {
-                        // Ignore other events
+                            else -> {}
+                        }
                     }
                 }
             }
-        }.catch { e ->
+        ).catch { e ->
             emit(ApiState.Error(e.message ?: "Unknown error"))
         }.onCompletion {
             emit(ApiState.Done)
@@ -220,60 +210,56 @@ class ChatRepositoryImpl @Inject constructor(
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2
     ): Flow<ApiState> = try {
-        // Configure API
         openAIAPI.setToken(platform.token)
         openAIAPI.setAPIUrl(platform.apiUrl)
 
-        // Build message list
-        val messages = mutableListOf<ChatMessage>()
+        streamPreparedApiState(
+            prepare = {
+                val messages = mutableListOf<ChatMessage>()
 
-        // Add system message if present
-        platform.systemPrompt?.takeIf { it.isNotBlank() }?.let { systemPrompt ->
-            messages.add(
-                ChatMessage(
-                    role = OpenAIRole.SYSTEM,
-                    content = listOf(OpenAITextContent(text = systemPrompt))
-                )
-            )
-        }
+                platform.systemPrompt?.takeIf { it.isNotBlank() }?.let { systemPrompt ->
+                    messages.add(
+                        ChatMessage(
+                            role = OpenAIRole.SYSTEM,
+                            content = listOf(OpenAITextContent(text = systemPrompt))
+                        )
+                    )
+                }
 
-        // Add conversation history (interleaved user and assistant messages)
-        userMessages.forEachIndexed { index, userMsg ->
-            // Add user message
-            messages.add(transformMessageV2ToChatMessage(userMsg, isUser = true))
+                userMessages.forEachIndexed { index, userMsg ->
+                    messages.add(transformMessageV2ToChatMessage(userMsg, isUser = true))
 
-            // Add assistant response if available (only include this platform's response)
-            if (index < assistantMessages.size) {
-                assistantMessages[index]
-                    .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
-                    ?.let { assistantMsg ->
-                        messages.add(transformMessageV2ToChatMessage(assistantMsg, isUser = false))
+                    if (index < assistantMessages.size) {
+                        assistantMessages[index]
+                            .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
+                            ?.let { assistantMsg ->
+                                messages.add(transformMessageV2ToChatMessage(assistantMsg, isUser = false))
+                            }
                     }
-            }
-        }
+                }
 
-        // Create request
-        val request = ChatCompletionRequest(
-            model = platform.model,
-            messages = messages,
-            stream = platform.stream,
-            temperature = platform.temperature,
-            topP = platform.topP
-        )
+                ChatCompletionRequest(
+                    model = platform.model,
+                    messages = messages,
+                    stream = platform.stream,
+                    temperature = platform.temperature,
+                    topP = platform.topP
+                )
+            },
+            stream = { request ->
+                flow {
+                    openAIAPI.streamChatCompletion(request, platform.timeout).collect { chunk ->
+                        when {
+                            chunk.error != null -> emit(ApiState.Error(chunk.error.message))
 
-        // Stream response
-        flow {
-            emit(ApiState.Loading)
-            openAIAPI.streamChatCompletion(request, platform.timeout).collect { chunk ->
-                when {
-                    chunk.error != null -> emit(ApiState.Error(chunk.error.message))
-
-                    chunk.choices?.firstOrNull()?.delta?.content != null -> {
-                        emit(ApiState.Success(chunk.choices.first().delta.content!!))
+                            chunk.choices?.firstOrNull()?.delta?.content != null -> {
+                                emit(ApiState.Success(chunk.choices.first().delta.content!!))
+                            }
+                        }
                     }
                 }
             }
-        }.catch { e ->
+        ).catch { e ->
             emit(ApiState.Error(e.message ?: "Unknown error"))
         }.onCompletion {
             emit(ApiState.Done)
@@ -365,75 +351,71 @@ class ChatRepositoryImpl @Inject constructor(
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2
     ): Flow<ApiState> = try {
-        // Configure API
         anthropicAPI.setToken(platform.token)
         anthropicAPI.setAPIUrl(platform.apiUrl)
 
-        // Build message list (Anthropic alternates user/assistant)
-        val messages = mutableListOf<InputMessage>()
+        streamPreparedApiState(
+            prepare = {
+                val messages = mutableListOf<InputMessage>()
 
-        userMessages.forEachIndexed { index, userMsg ->
-            // Add user message
-            messages.add(transformMessageV2ToAnthropic(userMsg, MessageRole.USER))
+                userMessages.forEachIndexed { index, userMsg ->
+                    messages.add(transformMessageV2ToAnthropic(userMsg, MessageRole.USER))
 
-            // Add assistant response if available (only include this platform's response)
-            if (index < assistantMessages.size) {
-                assistantMessages[index]
-                    .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
-                    ?.let { assistantMsg ->
-                        messages.add(transformMessageV2ToAnthropic(assistantMsg, MessageRole.ASSISTANT))
+                    if (index < assistantMessages.size) {
+                        assistantMessages[index]
+                            .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
+                            ?.let { assistantMsg ->
+                                messages.add(transformMessageV2ToAnthropic(assistantMsg, MessageRole.ASSISTANT))
+                            }
                     }
-            }
-        }
+                }
 
-        // Create request
-        // Note: When thinking is enabled, temperature defaults to 1 and top_p/top_k are not allowed
-        val request = MessageRequest(
-            model = platform.model,
-            messages = messages,
-            maxTokens = if (platform.reasoning) 16000 else 4096,
-            stream = platform.stream,
-            systemPrompt = platform.systemPrompt,
-            temperature = if (platform.reasoning) null else platform.temperature,
-            topP = if (platform.reasoning) null else platform.topP,
-            thinking = if (platform.reasoning) {
-                dev.chungjungsoo.gptmobile.data.dto.anthropic.request.ThinkingConfig(
-                    type = "enabled",
-                    budgetTokens = 10000
+                MessageRequest(
+                    model = platform.model,
+                    messages = messages,
+                    maxTokens = if (platform.reasoning) 16000 else 4096,
+                    stream = platform.stream,
+                    systemPrompt = platform.systemPrompt,
+                    temperature = if (platform.reasoning) null else platform.temperature,
+                    topP = if (platform.reasoning) null else platform.topP,
+                    thinking = if (platform.reasoning) {
+                        dev.chungjungsoo.gptmobile.data.dto.anthropic.request.ThinkingConfig(
+                            type = "enabled",
+                            budgetTokens = 10000
+                        )
+                    } else {
+                        null
+                    }
                 )
-            } else {
-                null
-            }
-        )
+            },
+            stream = { request ->
+                flow {
+                    anthropicAPI.streamChatMessage(request, platform.timeout).collect { chunk ->
+                        when (chunk) {
+                            is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentDeltaResponseChunk -> {
+                                when (chunk.delta.type) {
+                                    dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.THINKING_DELTA -> {
+                                        chunk.delta.thinking?.let { emit(ApiState.Thinking(it)) }
+                                    }
 
-        // Stream response
-        flow {
-            emit(ApiState.Loading)
-            anthropicAPI.streamChatMessage(request, platform.timeout).collect { chunk ->
-                when (chunk) {
-                    is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentDeltaResponseChunk -> {
-                        when (chunk.delta.type) {
-                            dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.THINKING_DELTA -> {
-                                chunk.delta.thinking?.let { emit(ApiState.Thinking(it)) }
+                                    dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.DELTA -> {
+                                        chunk.delta.text?.let { emit(ApiState.Success(it)) }
+                                    }
+
+                                    else -> {}
+                                }
                             }
 
-                            dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ContentBlockType.DELTA -> {
-                                chunk.delta.text?.let { emit(ApiState.Success(it)) }
+                            is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorResponseChunk -> {
+                                emit(ApiState.Error(chunk.error.message))
                             }
 
-                            // Ignore signature blocks and other types
                             else -> {}
                         }
                     }
-
-                    is dev.chungjungsoo.gptmobile.data.dto.anthropic.response.ErrorResponseChunk -> {
-                        emit(ApiState.Error(chunk.error.message))
-                    }
-
-                    else -> { /* Ignore other chunk types */ }
                 }
             }
-        }.catch { e ->
+        ).catch { e ->
             emit(ApiState.Error(e.message ?: "Unknown error"))
         }.onCompletion {
             emit(ApiState.Done)
@@ -484,70 +466,68 @@ class ChatRepositoryImpl @Inject constructor(
         assistantMessages: List<List<MessageV2>>,
         platform: PlatformV2
     ): Flow<ApiState> = try {
-        // Configure API
         googleAPI.setToken(platform.token)
         googleAPI.setAPIUrl(platform.apiUrl)
 
-        // Build contents list
-        val contents = mutableListOf<Content>()
+        streamPreparedApiState(
+            prepare = {
+                val contents = mutableListOf<Content>()
 
-        userMessages.forEachIndexed { index, userMsg ->
-            // Add user message
-            contents.add(transformMessageV2ToGoogle(userMsg, GoogleRole.USER))
+                userMessages.forEachIndexed { index, userMsg ->
+                    contents.add(transformMessageV2ToGoogle(userMsg, GoogleRole.USER))
 
-            // Add assistant response if available (only include this platform's response)
-            if (index < assistantMessages.size) {
-                assistantMessages[index]
-                    .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
-                    ?.let { assistantMsg ->
-                        contents.add(transformMessageV2ToGoogle(assistantMsg, GoogleRole.MODEL))
+                    if (index < assistantMessages.size) {
+                        assistantMessages[index]
+                            .firstOrNull { it.content.isNotBlank() && it.platformType == platform.uid }
+                            ?.let { assistantMsg ->
+                                contents.add(transformMessageV2ToGoogle(assistantMsg, GoogleRole.MODEL))
+                            }
                     }
-            }
-        }
-
-        // Create request
-        val request = GenerateContentRequest(
-            contents = contents,
-            generationConfig = GenerationConfig(
-                temperature = platform.temperature,
-                topP = platform.topP,
-                thinkingConfig = if (platform.reasoning) {
-                    dev.chungjungsoo.gptmobile.data.dto.google.request.ThinkingConfig(
-                        includeThoughts = true
-                    )
-                } else {
-                    null
                 }
-            ),
-            systemInstruction = platform.systemPrompt?.takeIf { it.isNotBlank() }?.let {
-                Content(
-                    parts = listOf(Part.text(it))
+
+                GenerateContentRequest(
+                    contents = contents,
+                    generationConfig = GenerationConfig(
+                        temperature = platform.temperature,
+                        topP = platform.topP,
+                        thinkingConfig = if (platform.reasoning) {
+                            dev.chungjungsoo.gptmobile.data.dto.google.request.ThinkingConfig(
+                                includeThoughts = true
+                            )
+                        } else {
+                            null
+                        }
+                    ),
+                    systemInstruction = platform.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+                        Content(
+                            parts = listOf(Part.text(it))
+                        )
+                    }
                 )
-            }
-        )
+            },
+            stream = { request ->
+                flow {
+                    googleAPI.streamGenerateContent(request, platform.model, platform.timeout).collect { response ->
+                        when {
+                            response.error != null -> emit(ApiState.Error(response.error.message))
 
-        // Stream response
-        flow {
-            emit(ApiState.Loading)
-            googleAPI.streamGenerateContent(request, platform.model, platform.timeout).collect { response ->
-                when {
-                    response.error != null -> emit(ApiState.Error(response.error.message))
-
-                    response.candidates?.firstOrNull()?.content?.parts != null -> {
-                        val parts = response.candidates.first().content.parts
-                        parts.forEach { part ->
-                            part.text?.let { text ->
-                                if (part.thought == true) {
-                                    emit(ApiState.Thinking(text))
-                                } else {
-                                    emit(ApiState.Success(text))
+                            response.candidates?.firstOrNull()?.content?.parts != null -> {
+                                val parts = response.candidates.first().content.parts
+                                parts.forEach { part ->
+                                    part.text?.let { text ->
+                                        if (part.thought == true) {
+                                            emit(ApiState.Thinking(text))
+                                        } else {
+                                            emit(ApiState.Success(text))
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }.catch { e ->
+        ).catch { e ->
             emit(ApiState.Error(e.message ?: "Unknown error"))
         }.onCompletion {
             emit(ApiState.Done)
@@ -791,4 +771,13 @@ internal fun validateResponseInputPartsOrThrow(messageContent: String, partCount
     if (messageContent.isBlank() && partCount == 0) {
         throw IllegalStateException("No encodable message content for messageId=$messageId")
     }
+}
+
+internal fun <T> streamPreparedApiState(
+    prepare: suspend () -> T,
+    stream: suspend (T) -> Flow<ApiState>
+): Flow<ApiState> = flow {
+    emit(ApiState.Loading)
+    val preparedRequest = withContext(Dispatchers.Default) { prepare() }
+    emitAll(stream(preparedRequest))
 }
