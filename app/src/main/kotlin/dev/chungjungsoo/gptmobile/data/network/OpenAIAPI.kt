@@ -11,4 +11,6 @@ interface OpenAIAPI {
     fun setAPIUrl(url: String)
     fun streamChatCompletion(request: ChatCompletionRequest, timeoutSeconds: Int): Flow<ChatCompletionChunk>
     fun streamResponses(request: ResponsesRequest, timeoutSeconds: Int): Flow<ResponsesStreamEvent>
+    suspend fun uploadFile(filePath: String, fileName: String, mimeType: String): UploadedProviderFile
+    suspend fun isFileAvailable(fileId: String): Boolean
 }

@@ -7,5 +7,8 @@ import kotlinx.serialization.Serializable
 enum class ImageSourceType {
 
     @SerialName("base64")
-    BASE64
+    BASE64,
+
+    @SerialName("file")
+    FILE
 }

@@ -26,12 +26,16 @@ data class Part(
     @SerialName("inline_data")
     val inlineData: InlineData? = null,
 
+    @SerialName("file_data")
+    val fileData: FileData? = null,
+
     @SerialName("thought")
     val thought: Boolean? = null
 ) {
     companion object {
         fun text(text: String) = Part(text = text)
         fun inlineData(mimeType: String, data: String) = Part(inlineData = InlineData(mimeType, data))
+        fun fileData(mimeType: String, fileUri: String) = Part(fileData = FileData(mimeType, fileUri))
     }
 }
 
@@ -43,4 +47,12 @@ data class InlineData(
     // Base64-encoded
     @SerialName("data")
     val data: String
+)
+
+@Serializable
+data class FileData(
+    @SerialName("mime_type")
+    val mimeType: String,
+    @SerialName("file_uri")
+    val fileUri: String
 )

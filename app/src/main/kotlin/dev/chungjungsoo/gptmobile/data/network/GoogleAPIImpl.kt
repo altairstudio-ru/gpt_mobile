@@ -6,14 +6,18 @@ import dev.chungjungsoo.gptmobile.data.dto.google.response.GenerateContentRespon
 import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +39,59 @@ class GoogleAPIImpl @Inject constructor(
 
     override fun setAPIUrl(url: String) {
         this.apiUrl = url
+    }
+
+    override suspend fun uploadFile(filePath: String, fileName: String, mimeType: String): UploadedProviderFile {
+        val file = File(filePath)
+        val startEndpoint = if (apiUrl.endsWith("/")) "${apiUrl}upload/v1beta/files" else "$apiUrl/upload/v1beta/files"
+        val uploadUrl = networkClient().preparePost(startEndpoint) {
+            parameter("key", token ?: "")
+            contentType(ContentType.Application.Json)
+            header("X-Goog-Upload-Protocol", "resumable")
+            header("X-Goog-Upload-Command", "start")
+            header("X-Goog-Upload-Header-Content-Length", file.length().toString())
+            header("X-Goog-Upload-Header-Content-Type", mimeType)
+            setBody("""{"file":{"display_name":"$fileName"}}""")
+        }.execute { response ->
+            if (!response.status.isSuccess()) {
+                throw IllegalStateException(response.body<String>())
+            }
+            response.headers["x-goog-upload-url"] ?: response.headers["X-Goog-Upload-URL"]
+        } ?: throw IllegalStateException("Failed to obtain Google upload URL")
+
+        val responseBody = networkClient().preparePost(uploadUrl) {
+            header("X-Goog-Upload-Offset", "0")
+            header("X-Goog-Upload-Command", "upload, finalize")
+            header(HttpHeaders.ContentLength, file.length().toString())
+            contentType(ContentType.parse(mimeType))
+            setBody(file.readBytes())
+        }.body<String>()
+
+        val uploadResponse = NetworkClient.json.decodeFromString<GoogleFileUploadResponse>(responseBody)
+        return UploadedProviderFile(
+            id = uploadResponse.file.uri ?: uploadResponse.file.name ?: "",
+            mimeType = uploadResponse.file.mimeType ?: mimeType,
+            name = uploadResponse.file.name,
+            uri = uploadResponse.file.uri
+        )
+    }
+
+    override suspend fun isFileAvailable(fileName: String): Boolean {
+        val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1beta/$fileName" else "$apiUrl/v1beta/$fileName"
+        return try {
+            networkClient().prepareGet(endpoint) {
+                parameter("key", token ?: "")
+            }.execute { response ->
+                if (!response.status.isSuccess()) {
+                    false
+                } else {
+                    val metadata = NetworkClient.json.decodeFromString<GoogleFileMetadata>(response.body<String>())
+                    metadata.state == null || metadata.state == "ACTIVE"
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override fun streamGenerateContent(request: GenerateContentRequest, model: String, timeoutSeconds: Int): Flow<GenerateContentResponse> = flow {
@@ -130,4 +187,18 @@ private data class GoogleError(
     val code: Int? = null,
     val message: String,
     val status: String? = null
+)
+
+@Serializable
+private data class GoogleFileUploadResponse(
+    val file: GoogleFileMetadata
+)
+
+@Serializable
+private data class GoogleFileMetadata(
+    val name: String? = null,
+    val uri: String? = null,
+    @kotlinx.serialization.SerialName("mime_type")
+    val mimeType: String? = null,
+    val state: String? = null
 )

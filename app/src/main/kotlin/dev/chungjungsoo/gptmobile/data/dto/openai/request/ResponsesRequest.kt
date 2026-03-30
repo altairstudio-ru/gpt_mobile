@@ -149,6 +149,10 @@ data class ResponseContentPart(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val imageUrl: String? = null,
 
+    @SerialName("file_id")
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val fileId: String? = null,
+
     @SerialName("detail")
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val detail: String? = null
@@ -158,6 +162,11 @@ data class ResponseContentPart(
         fun image(url: String, detail: String = "auto") = ResponseContentPart(
             type = "input_image",
             imageUrl = url,
+            detail = detail
+        )
+        fun imageFile(fileId: String, detail: String = "auto") = ResponseContentPart(
+            type = "input_image",
+            fileId = fileId,
             detail = detail
         )
     }

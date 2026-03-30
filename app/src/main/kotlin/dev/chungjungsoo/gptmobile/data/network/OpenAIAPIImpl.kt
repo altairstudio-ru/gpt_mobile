@@ -13,13 +13,19 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +47,48 @@ class OpenAIAPIImpl @Inject constructor(
 
     override fun setAPIUrl(url: String) {
         this.apiUrl = url
+    }
+
+    override suspend fun uploadFile(filePath: String, fileName: String, mimeType: String): UploadedProviderFile {
+        val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/files" else "$apiUrl/v1/files"
+        val responseBody = networkClient().preparePost(endpoint) {
+            token?.let { bearerAuth(it) }
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("purpose", "user_data")
+                        append(
+                            "file",
+                            File(filePath).readBytes(),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, mimeType)
+                                append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }.body<String>()
+
+        val uploadResponse = NetworkClient.openAIJson.decodeFromString<OpenAIFileResponse>(responseBody)
+        return UploadedProviderFile(
+            id = uploadResponse.id,
+            mimeType = uploadResponse.mimeType ?: mimeType,
+            name = uploadResponse.filename
+        )
+    }
+
+    override suspend fun isFileAvailable(fileId: String): Boolean {
+        val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/files/$fileId" else "$apiUrl/v1/files/$fileId"
+        return try {
+            networkClient().prepareGet(endpoint) {
+                token?.let { bearerAuth(it) }
+            }.execute { response ->
+                response.status.isSuccess()
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override fun streamChatCompletion(request: ChatCompletionRequest, timeoutSeconds: Int): Flow<ChatCompletionChunk> = flow {
@@ -190,4 +238,12 @@ private data class OpenAIError(
     val type: String? = null,
     val param: String? = null,
     val code: String? = null
+)
+
+@Serializable
+private data class OpenAIFileResponse(
+    val id: String,
+    val filename: String? = null,
+    @kotlinx.serialization.SerialName("mime_type")
+    val mimeType: String? = null
 )

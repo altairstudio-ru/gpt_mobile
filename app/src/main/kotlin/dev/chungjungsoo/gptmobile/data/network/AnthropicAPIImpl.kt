@@ -9,14 +9,20 @@ import dev.chungjungsoo.gptmobile.util.applyPlatformStreamingTimeout
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.accept
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.headers
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -48,6 +54,55 @@ class AnthropicAPIImpl @Inject constructor(
         this.apiUrl = url
     }
 
+    override suspend fun uploadFile(filePath: String, fileName: String, mimeType: String): UploadedProviderFile {
+        val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/files" else "$apiUrl/v1/files"
+        val responseBody = networkClient().preparePost(endpoint) {
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            "file",
+                            File(filePath).readBytes(),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, mimeType)
+                                append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                            }
+                        )
+                    }
+                )
+            )
+            headers {
+                append(API_KEY_HEADER, token ?: "")
+                append(VERSION_HEADER, ANTHROPIC_VERSION)
+                append(BETA_HEADER, ANTHROPIC_FILES_BETA)
+            }
+        }.body<String>()
+
+        val uploadResponse = json.decodeFromString<AnthropicFileResponse>(responseBody)
+        return UploadedProviderFile(
+            id = uploadResponse.id,
+            mimeType = uploadResponse.mimeType ?: mimeType,
+            name = uploadResponse.filename
+        )
+    }
+
+    override suspend fun isFileAvailable(fileId: String): Boolean {
+        val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/files/$fileId" else "$apiUrl/v1/files/$fileId"
+        return try {
+            networkClient().prepareGet(endpoint) {
+                headers {
+                    append(API_KEY_HEADER, token ?: "")
+                    append(VERSION_HEADER, ANTHROPIC_VERSION)
+                    append(BETA_HEADER, ANTHROPIC_FILES_BETA)
+                }
+            }.execute { response ->
+                response.status.isSuccess()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     override fun streamChatMessage(messageRequest: MessageRequest, timeoutSeconds: Int): Flow<MessageResponseChunk> = flow {
         try {
             val endpoint = if (apiUrl.endsWith("/")) "${apiUrl}v1/messages" else "$apiUrl/v1/messages"
@@ -60,6 +115,7 @@ class AnthropicAPIImpl @Inject constructor(
                 headers {
                     append(API_KEY_HEADER, token ?: "")
                     append(VERSION_HEADER, ANTHROPIC_VERSION)
+                    append(BETA_HEADER, ANTHROPIC_FILES_BETA)
                 }
             }.execute { response ->
                 if (!response.status.isSuccess()) {
@@ -108,7 +164,9 @@ class AnthropicAPIImpl @Inject constructor(
     companion object {
         private const val API_KEY_HEADER = "x-api-key"
         private const val VERSION_HEADER = "anthropic-version"
+        private const val BETA_HEADER = "anthropic-beta"
         private const val ANTHROPIC_VERSION = "2023-06-01"
+        private const val ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
     }
 }
 
@@ -122,4 +180,12 @@ private data class AnthropicErrorResponse(
 private data class AnthropicError(
     val type: String,
     val message: String
+)
+
+@Serializable
+private data class AnthropicFileResponse(
+    val id: String,
+    val filename: String? = null,
+    @kotlinx.serialization.SerialName("mime_type")
+    val mimeType: String? = null
 )
