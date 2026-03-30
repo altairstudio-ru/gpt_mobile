@@ -15,10 +15,12 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.encodeToString
 
 class GoogleAPIImpl @Inject constructor(
     private val networkClient: NetworkClient
@@ -48,7 +50,7 @@ class GoogleAPIImpl @Inject constructor(
                 parameter("key", token ?: "")
                 parameter("alt", "sse")
                 contentType(ContentType.Application.Json)
-                setBody(NetworkClient.json.encodeToJsonElement(request))
+                setBody(NetworkClient.json.encodeToString(request))
             }.execute { response ->
                 if (!response.status.isSuccess()) {
                     val errorBody = response.body<String>()
@@ -115,7 +117,7 @@ class GoogleAPIImpl @Inject constructor(
                 )
             )
         }
-    }
+    }.flowOn(Dispatchers.IO)
 }
 
 @Serializable

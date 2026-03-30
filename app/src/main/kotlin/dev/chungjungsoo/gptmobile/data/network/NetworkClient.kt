@@ -1,5 +1,4 @@
 package dev.chungjungsoo.gptmobile.data.network
-
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.DefaultRequest
@@ -37,7 +36,7 @@ class NetworkClient @Inject constructor(
 
             install(Logging) {
                 logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = resolveNetworkLogLevel()
                 sanitizeHeader { header -> header == HttpHeaders.Authorization }
             }
 
@@ -70,5 +69,7 @@ class NetworkClient @Inject constructor(
             encodeDefaults = true
             explicitNulls = false
         }
+
+        internal fun resolveNetworkLogLevel(): LogLevel = LogLevel.HEADERS
     }
 }

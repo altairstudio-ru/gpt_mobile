@@ -18,11 +18,13 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToJsonElement
 
 class AnthropicAPIImpl @Inject constructor(
     private val networkClient: NetworkClient
@@ -53,7 +55,7 @@ class AnthropicAPIImpl @Inject constructor(
             networkClient().preparePost(endpoint) {
                 applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
-                setBody(json.encodeToJsonElement(messageRequest))
+                setBody(json.encodeToString(messageRequest))
                 accept(ContentType.Text.EventStream)
                 headers {
                     append(API_KEY_HEADER, token ?: "")
@@ -63,7 +65,6 @@ class AnthropicAPIImpl @Inject constructor(
                 if (!response.status.isSuccess()) {
                     val errorBody = response.body<String>()
 
-                    // Parse error - Anthropic format: {"type": "error", "error": {"type": "...", "message": "..."}}
                     val errorMessage = try {
                         val errorResponse = json.decodeFromString<AnthropicErrorResponse>(errorBody)
                         errorResponse.error.message
@@ -75,7 +76,6 @@ class AnthropicAPIImpl @Inject constructor(
                     return@execute
                 }
 
-                // Success - read SSE stream
                 val channel = response.bodyAsChannel()
                 while (!channel.isClosedForRead) {
                     val line = channel.readLine() ?: break
@@ -103,7 +103,7 @@ class AnthropicAPIImpl @Inject constructor(
             }
             emit(ErrorResponseChunk(error = ErrorDetail(type = "network_error", message = errorMessage)))
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     companion object {
         private const val API_KEY_HEADER = "x-api-key"

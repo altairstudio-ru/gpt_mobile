@@ -21,10 +21,12 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.encodeToString
 
 class OpenAIAPIImpl @Inject constructor(
     private val networkClient: NetworkClient
@@ -48,7 +50,7 @@ class OpenAIAPIImpl @Inject constructor(
             networkClient().preparePost(endpoint) {
                 applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
-                setBody(NetworkClient.openAIJson.encodeToJsonElement(request))
+                setBody(NetworkClient.openAIJson.encodeToString(request))
                 accept(ContentType.Text.EventStream)
                 token?.let { bearerAuth(it) }
             }.execute { response ->
@@ -112,7 +114,7 @@ class OpenAIAPIImpl @Inject constructor(
                 )
             )
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     override fun streamResponses(request: ResponsesRequest, timeoutSeconds: Int): Flow<ResponsesStreamEvent> = flow {
         try {
@@ -121,7 +123,7 @@ class OpenAIAPIImpl @Inject constructor(
             networkClient().preparePost(endpoint) {
                 applyPlatformStreamingTimeout(timeoutSeconds)
                 contentType(ContentType.Application.Json)
-                setBody(NetworkClient.openAIJson.encodeToJsonElement(request))
+                setBody(NetworkClient.openAIJson.encodeToString(request))
                 accept(ContentType.Text.EventStream)
                 token?.let { bearerAuth(it) }
             }.execute { response ->
@@ -174,7 +176,7 @@ class OpenAIAPIImpl @Inject constructor(
                 )
             )
         }
-    }
+    }.flowOn(Dispatchers.IO)
 }
 
 @Serializable
