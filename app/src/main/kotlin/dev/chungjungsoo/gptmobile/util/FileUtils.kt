@@ -18,6 +18,7 @@ object FileUtils {
     private const val TAG = "FileUtils"
     const val MAX_UPLOAD_SIZE_BYTES = 50L * 1024 * 1024
     private const val MAX_IMAGE_UPLOAD_DIMENSION = 2048
+    private const val MAX_IMAGE_DIRECT_UPLOAD_SIZE_BYTES = 8L * 1024 * 1024
     private const val IMAGE_UPLOAD_QUALITY = 95
 
     data class EncodedImage(
@@ -69,6 +70,7 @@ object FileUtils {
 
     fun prepareAttachmentForUpload(context: Context, filePath: String): AttachmentPreparationResult? {
         val mimeType = getMimeType(context, filePath)
+        val fileSize = getFileSize(context, filePath)
         if (!validateFileSize(context, filePath, MAX_UPLOAD_SIZE_BYTES)) return null
         if (!isSupportedUploadMimeType(mimeType) || mimeType == "image/gif" || mimeType == "image/svg+xml") {
             return AttachmentPreparationResult(
@@ -84,7 +86,7 @@ object FileUtils {
             wasResized = false
         )
 
-        if (!shouldResizeImage(dimensions.first, dimensions.second)) {
+        if (!shouldResizeImageForUpload(dimensions.first, dimensions.second, fileSize)) {
             return AttachmentPreparationResult(
                 preparedFilePath = filePath,
                 mimeType = mimeType,
@@ -101,8 +103,20 @@ object FileUtils {
     }
 
     fun encodeFileForUpload(context: Context, filePath: String, mimeType: String): EncodedImage? {
-        val base64Data = encodeFileToBase64(context, filePath) ?: return null
-        return EncodedImage(mimeType = mimeType, base64Data = base64Data)
+        if (!isImage(mimeType)) {
+            val base64Data = encodeFileToBase64(context, filePath) ?: return null
+            return EncodedImage(mimeType = mimeType, base64Data = base64Data)
+        }
+
+        val preparedAttachment = prepareAttachmentForUpload(context, filePath) ?: return null
+        return try {
+            val base64Data = encodeFileToBase64(context, preparedAttachment.preparedFilePath) ?: return null
+            EncodedImage(mimeType = preparedAttachment.mimeType, base64Data = base64Data)
+        } finally {
+            if (preparedAttachment.preparedFilePath != filePath) {
+                File(preparedAttachment.preparedFilePath).delete()
+            }
+        }
     }
 
     /**
@@ -266,6 +280,14 @@ object FileUtils {
         originalHeight: Int,
         maxDimension: Int = MAX_IMAGE_UPLOAD_DIMENSION
     ): Boolean = maxOf(originalWidth, originalHeight) > maxDimension
+
+    internal fun shouldResizeImageForUpload(
+        originalWidth: Int,
+        originalHeight: Int,
+        fileSizeBytes: Long,
+        maxDimension: Int = MAX_IMAGE_UPLOAD_DIMENSION,
+        maxDirectFileSizeBytes: Long = MAX_IMAGE_DIRECT_UPLOAD_SIZE_BYTES
+    ): Boolean = shouldResizeImage(originalWidth, originalHeight, maxDimension) || fileSizeBytes > maxDirectFileSizeBytes
 
     internal fun calculateImageInSampleSize(
         originalWidth: Int,

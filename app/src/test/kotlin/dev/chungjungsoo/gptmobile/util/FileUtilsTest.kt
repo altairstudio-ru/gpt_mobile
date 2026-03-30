@@ -29,6 +29,24 @@ class FileUtilsTest {
     }
 
     @Test
+    fun `large image files resize even when dimensions are within threshold`() {
+        assertTrue(
+            FileUtils.shouldResizeImageForUpload(
+                originalWidth = 1600,
+                originalHeight = 1200,
+                fileSizeBytes = 9L * 1024 * 1024
+            )
+        )
+        assertFalse(
+            FileUtils.shouldResizeImageForUpload(
+                originalWidth = 1600,
+                originalHeight = 1200,
+                fileSizeBytes = 2L * 1024 * 1024
+            )
+        )
+    }
+
+    @Test
     fun `draft upload limit is enforced across all selected attachments`() {
         assertTrue(FileUtils.wouldExceedTotalUploadLimit(45L * 1024 * 1024, 6L * 1024 * 1024))
         assertFalse(FileUtils.wouldExceedTotalUploadLimit(40L * 1024 * 1024, 5L * 1024 * 1024))
