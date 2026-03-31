@@ -11,19 +11,19 @@ jobs:
     name: Build Release APK
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
           cache: "gradle"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Latest Build Tools
         run: |
@@ -78,7 +78,7 @@ jobs:
         working-directory: ${{ github.workspace }}/app/build/outputs
 
       - name: Upload Signed APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         id: artifact-upload-step
         with:
           name: release-${{ github.sha }}
