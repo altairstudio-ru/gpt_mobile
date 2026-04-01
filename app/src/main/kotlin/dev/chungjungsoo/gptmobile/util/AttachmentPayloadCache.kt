@@ -1,7 +1,5 @@
 package dev.chungjungsoo.gptmobile.util
 
-import java.util.LinkedHashMap
-
 object AttachmentPayloadCache {
     internal const val MAX_ENTRIES: Int = 32
 

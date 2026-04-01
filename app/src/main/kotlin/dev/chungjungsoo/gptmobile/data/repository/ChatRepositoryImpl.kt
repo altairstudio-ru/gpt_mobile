@@ -16,7 +16,6 @@ import dev.chungjungsoo.gptmobile.data.database.entity.PlatformV2
 import dev.chungjungsoo.gptmobile.data.dto.ApiState
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.ImageContent as AnthropicImageContent
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.ImageSource
-import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.ImageSourceType
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MediaType
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MessageContent as AnthropicMessageContent
 import dev.chungjungsoo.gptmobile.data.dto.anthropic.common.MessageRole

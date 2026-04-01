@@ -12,7 +12,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.Base64
+import java.util.*
 
 object FileUtils {
     private const val TAG = "FileUtils"
